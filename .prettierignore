@@ -1,0 +1,8 @@
+out/
+dist/
+node_modules/
+build/
+resources/
+python/
+package-lock.json
+*.swift

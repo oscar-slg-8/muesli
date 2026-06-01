@@ -1,0 +1,184 @@
+# Muesli
+
+**A private, on-device meeting assistant for macOS** — records your meetings, transcribes them, identifies who said what, and writes a structured summary, without sending audio to any meeting platform or recording bot.
+
+Muesli runs entirely as a local desktop app. The only data that leaves your machine are the audio chunks sent to the speech and language model APIs you configure (Groq, pyannoteAI, Anthropic) — there is no Muesli backend, no account, and no telemetry.
+
+> 🇫🇷 _Version française plus bas — [aller à la section française](#muesli-fr)._
+
+[![CI](https://github.com/oscar-slg-8/muesli/actions/workflows/ci.yml/badge.svg)](https://github.com/oscar-slg-8/muesli/actions/workflows/ci.yml)
+![platform](<https://img.shields.io/badge/platform-macOS%2014.2%2B%20(Apple%20Silicon)-black>)
+![electron](https://img.shields.io/badge/Electron-32-47848F)
+![typescript](https://img.shields.io/badge/TypeScript-5.7-3178C6)
+![license](https://img.shields.io/badge/license-MIT-green)
+
+---
+
+## Why it exists
+
+Most meeting-notes tools join the call as a visible bot or upload everything to a SaaS backend. Muesli takes the opposite approach: it captures the microphone and system audio **locally** on macOS, so it works on any call (Meet, Zoom, Teams, a phone on speaker) and nothing is stored on a third-party server you don't control.
+
+## Features
+
+- **Local dual-stream capture** — microphone and system audio are recorded separately (stereo `chunk_NNN.wav`, L = you, R = the room) using the macOS 14.2+ Core Audio Process Tap, with an `ffmpeg`/BlackHole fallback.
+- **Transcription** — Groq Whisper (`whisper-large-v3`), chunked with voice-activity detection and loudness normalization to handle 90-minute meetings.
+- **Speaker diarization** — pyannoteAI assigns each segment to a speaker, then segments are re-transcribed per speaker and merged into a clean, attributed transcript.
+- **Summarization** — Anthropic Claude (`claude-haiku-4-5-20251001`) produces a structured summary; summary prompts are user-editable templates.
+- **Full-text search** — every transcript is indexed with SQLite FTS5.
+- **Calendar integration** — reads upcoming macOS Calendar events (EventKit) and pre-creates meetings with the right title and join link.
+- **Export** — push notes to Notion.
+- **Private by design** — API keys are encrypted at rest with the macOS Keychain (`safeStorage`); no audio is persisted off-device.
+
+## Architecture
+
+Electron with a strict process split: the **main process** owns all I/O (audio, database, network, native helpers); the **renderer** (React) talks to it only through a whitelisted `window.api` bridge. Every IPC call is validated with a Zod schema before it runs.
+
+```mermaid
+flowchart LR
+    subgraph Renderer["Renderer (React)"]
+        UI[UI + VU meter]
+    end
+    subgraph Main["Main process (Node)"]
+        ORCH[RecordingOrchestrator]
+        PIPE[PipelineManager]
+        DB[(SQLite + FTS5)]
+    end
+    subgraph Native["Native helpers (Swift)"]
+        TAP[system-audio-capture<br/>Core Audio Process Tap]
+        CAL[calendar-helper<br/>EventKit]
+    end
+    subgraph Cloud["External APIs"]
+        GROQ[Groq Whisper]
+        PYAN[pyannoteAI]
+        ANTH[Anthropic Claude]
+    end
+
+    UI -- window.api (Zod-validated IPC) --> ORCH
+    ORCH --> TAP
+    ORCH --> PIPE
+    PIPE -- transcribe --> GROQ
+    PIPE -- diarize --> PYAN
+    PIPE -- summarize --> ANTH
+    PIPE --> DB
+    CAL --> ORCH
+```
+
+**Transcription pipeline** (`electron/recording/PipelineManager.ts`):
+
+```
+extract mono → VAD → normalize → Groq Whisper
+  → pyannote diarize → per-speaker re-transcribe → merge
+  → Claude summarize → persist
+```
+
+Meeting lifecycle: `draft → recording → transcribing → summarizing → complete | error`. On startup, any meeting left mid-pipeline by a crash is automatically recovered and re-run.
+
+A detailed design document (in French) lives in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+### AI in production: the engineering that matters
+
+The interesting part of Muesli is not calling three model APIs — it's making that pipeline reliable enough to trust with a 90-minute meeting:
+
+- **Resilient network calls.** `AbortSignal.timeout()` is unreliable in the Electron main process (its backing timer can fail to fire while the event loop is busy with network I/O), so all API calls use a manual `AbortController` + `setTimeout` `fetchWithTimeout()` wrapper, consistently across the Groq, pyannote, and Anthropic clients.
+- **Long-running jobs.** Diarization is an async polling job with exponential backoff and a 30-minute ceiling; transcription is chunked so a single failure doesn't lose the whole meeting.
+- **Crash recovery.** In-flight meetings are reconciled and re-processed on the next launch.
+- **Defense in depth.** All IPC is Zod-validated at the process boundary; credentials are encrypted with the OS keychain; the renderer runs with `contextIsolation` and no Node integration.
+
+## Tech stack
+
+| Layer          | Choice                                          |
+| -------------- | ----------------------------------------------- |
+| Shell          | Electron 32 (Node 20 / Chromium)                |
+| UI             | React 18 + TypeScript + Tailwind CSS            |
+| Storage        | better-sqlite3 with FTS5                        |
+| Validation     | Zod (all IPC)                                   |
+| Speech-to-text | Groq Whisper `whisper-large-v3`                 |
+| Diarization    | pyannoteAI                                      |
+| Summarization  | Anthropic Claude `claude-haiku-4-5-20251001`    |
+| Native helpers | Swift (Core Audio Process Tap, EventKit)        |
+| Tooling        | electron-vite, ESLint, Prettier, GitHub Actions |
+
+## Getting started
+
+**Requirements:** macOS 14.2+ on Apple Silicon · Node.js 22 LTS.
+
+```bash
+brew install node@22
+brew install blackhole-2ch switchaudio-osx   # system-audio fallback + auto device switching
+
+npm install        # postinstall patches the Electron app bundle
+npm run rebuild     # rebuild better-sqlite3 for the Electron ABI
+npm run dev
+```
+
+Add your API keys in **Settings** (stored encrypted in the macOS Keychain):
+
+- **Groq** — transcription, free tier available · [console.groq.com](https://console.groq.com)
+- **pyannoteAI** — speaker diarization · [pyannote.ai](https://www.pyannote.ai)
+- **Anthropic** — summaries, ~$0.01/meeting · [console.anthropic.com](https://console.anthropic.com)
+
+### Development
+
+```bash
+npm run lint          # ESLint
+npm run format:check  # Prettier
+npm run typecheck     # tsc --noEmit
+npm run build         # electron-vite build
+```
+
+These four checks are the CI gate (`.github/workflows/ci.yml`). See [`CONTRIBUTING.md`](CONTRIBUTING.md) for details.
+
+<!-- Screenshots: add app screenshots to a docs/ folder and reference them here. -->
+
+---
+
+<a name="muesli-fr"></a>
+
+## 🇫🇷 Muesli (français)
+
+**Un assistant de réunion privé et local pour macOS** — enregistre vos réunions, les transcrit, identifie qui a parlé, et rédige un résumé structuré, sans bot visible et sans backend distant.
+
+Muesli est une application de bureau **100 % locale** : aucun compte, aucune télémétrie, aucun serveur Muesli. Les seules données qui quittent votre machine sont les extraits audio envoyés aux API que vous configurez (Groq, pyannoteAI, Anthropic).
+
+### Fonctionnalités
+
+- **Capture double flux locale** — micro et audio système enregistrés séparément (`chunk_NNN.wav` stéréo : G = vous, D = la salle) via le _Process Tap_ Core Audio (macOS 14.2+), avec repli `ffmpeg`/BlackHole.
+- **Transcription** — Groq Whisper (`whisper-large-v3`), découpée avec détection d'activité vocale et normalisation pour gérer des réunions de 90 minutes.
+- **Diarisation** — pyannoteAI attribue chaque segment à un locuteur, puis re-transcription par locuteur et fusion en une transcription attribuée.
+- **Résumé** — Claude (`claude-haiku-4-5-20251001`), avec des modèles de prompt modifiables.
+- **Recherche plein texte** — chaque transcription est indexée avec SQLite FTS5.
+- **Calendrier** — lecture des événements macOS (EventKit) et pré-création des réunions.
+- **Export Notion**.
+- **Privé par conception** — clés API chiffrées via le Trousseau macOS (`safeStorage`).
+
+### Architecture
+
+Séparation stricte des processus Electron : le **processus principal** gère toutes les I/O (audio, base de données, réseau, binaires natifs) ; le **renderer** (React) ne communique qu'à travers un pont `window.api` filtré, et chaque appel IPC est validé par un schéma Zod. Pipeline :
+
+```
+mono → VAD → normalisation → Groq Whisper
+  → diarisation pyannote → re-transcription par locuteur → fusion
+  → résumé Claude → persistance
+```
+
+Le détail de conception se trouve dans [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+### Installation
+
+**Prérequis :** macOS 14.2+ sur Apple Silicon · Node.js 22 LTS.
+
+```bash
+brew install node@22
+brew install blackhole-2ch switchaudio-osx
+npm install
+npm run rebuild
+npm run dev
+```
+
+Renseignez vos clés API dans **Réglages** (chiffrées dans le Trousseau macOS) : Groq (transcription), pyannoteAI (diarisation), Anthropic (résumés).
+
+---
+
+## License
+
+[MIT](LICENSE) © Oscar Salmon-Legagneur

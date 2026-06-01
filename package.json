@@ -1,0 +1,103 @@
+{
+  "name": "muesli",
+  "version": "0.1.0",
+  "description": "Prise de notes de réunions — macOS",
+  "productName": "Muesli",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "patch:electron": "node scripts/patch-electron.js",
+    "postinstall": "npm run patch:electron",
+    "dev": "npm run patch:electron && electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"electron/**/*.ts\" \"scripts/**/*.{js,mjs}\" \".github/**/*.yml\" \"*.{js,ts,json,html}\" README.md ARCHITECTURE.md CONTRIBUTING.md",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"electron/**/*.ts\" \"scripts/**/*.{js,mjs}\" \".github/**/*.yml\" \"*.{js,ts,json,html}\" README.md ARCHITECTURE.md CONTRIBUTING.md",
+    "rebuild": "electron-rebuild",
+    "build:icon": "node scripts/build-icon.js && node scripts/build-tray-icons.js",
+    "build:calendar": "xcrun swiftc -framework EventKit -framework Foundation electron/calendar.swift -o resources/calendar-helper",
+    "build:system-audio": "node scripts/build-system-audio.js",
+    "dist": "npm run build:icon && npm run build:system-audio && electron-vite build && electron-builder",
+    "pack": "electron-vite build && electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.muesli.app",
+    "productName": "Muesli",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "migrations/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/better-sqlite3/build/Release",
+        "to": "app.asar.unpacked/node_modules/better-sqlite3/build/Release",
+        "filter": [
+          "*.node"
+        ]
+      },
+      {
+        "from": "resources/calendar-helper",
+        "to": "calendar-helper"
+      },
+      {
+        "from": "resources/system-audio-capture",
+        "to": "system-audio-capture"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Muesli"
+    }
+  },
+  "dependencies": {
+    "audiotee": "^0.0.7",
+    "better-sqlite3": "^11.7.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.1",
+    "@eslint/js": "^9.39.4",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "electron": "^32.2.6",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.26",
+    "globals": "^15.15.0",
+    "postcss": "^8.4.49",
+    "prettier": "^3.8.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sharp": "^0.33.5",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.60.0"
+  }
+}

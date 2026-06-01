@@ -1,0 +1,35 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fond beige — pas de rx ici : macOS applique son propre masque squircle
+       sur l'icône finale. Pré-bake un rx="112" provoque un carré visible
+       aux angles car les deux formes ne coïncident pas exactement. -->
+  <rect width="512" height="512" fill="#F0E6D3"/>
+
+  <g transform="translate(256, 256) scale(2.3) translate(-257, -252)">
+  <!-- Chunk de muesli — forme irrégulière, terre battue -->
+  <path d="
+    M196 196
+    C204 178, 232 168, 264 170
+    C296 172, 324 180, 336 198
+    C348 216, 350 240, 344 264
+    C338 288, 326 308, 304 320
+    C282 332, 248 336, 220 328
+    C192 316, 172 292, 168 264
+    C164 236, 180 214, 196 196
+    Z
+  " fill="#B5714D"/>
+
+  <!-- Texture — flocons incrustés -->
+  <ellipse cx="240" cy="232" rx="24" ry="10" fill="#C98B66" opacity="0.7" transform="rotate(-20 240 232)"/>
+  <ellipse cx="288" cy="252" rx="20" ry="9" fill="#D4A07A" opacity="0.6" transform="rotate(15 288 252)"/>
+  <ellipse cx="252" cy="280" rx="18" ry="8" fill="#C98B66" opacity="0.5" transform="rotate(-8 252 280)"/>
+
+  <!-- Graines / éclats -->
+  <circle cx="224" cy="260" r="6" fill="#A0623C" opacity="0.6"/>
+  <circle cx="300" cy="228" r="5" fill="#8B5332" opacity="0.5"/>
+  <circle cx="268" cy="304" r="5" fill="#A0623C" opacity="0.4"/>
+
+  <!-- Craquelure subtile -->
+  <path d="M232 210 C248 240, 260 270, 252 310" stroke="#9E5E38" stroke-width="1.5" fill="none" opacity="0.3"/>
+  <path d="M280 200 C276 230, 290 268, 296 300" stroke="#9E5E38" stroke-width="1" fill="none" opacity="0.2"/>
+  </g>
+</svg>

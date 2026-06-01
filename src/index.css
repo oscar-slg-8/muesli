@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  background: #f7f6f3;
+  color: #1a1a1a;
+}
+
+/* Zone draggable pour déplacer la fenêtre (titleBarStyle: hiddenInset) */
+.titlebar-drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+/* Les éléments interactifs dans la zone draggable doivent être exclus */
+.titlebar-drag button,
+.titlebar-drag input,
+.titlebar-drag select,
+.titlebar-drag a {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4d3ce;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #adadaa;
+}
+
+@keyframes pulse-record {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.animate-record {
+  animation: pulse-record 1.4s ease-in-out infinite;
+}
+
+.prose-meeting h2 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-top: 1.4rem;
+  margin-bottom: 0.4rem;
+}
+.prose-meeting p {
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: #3a3a3a;
+  margin-bottom: 0.65rem;
+}
+.prose-meeting ul,
+.prose-meeting ol {
+  padding-left: 1.2rem;
+  margin-bottom: 0.65rem;
+}
+.prose-meeting li {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #3a3a3a;
+  margin-bottom: 0.2rem;
+}
+.prose-meeting strong {
+  font-weight: 600;
+  color: #1a1a1a;
+}

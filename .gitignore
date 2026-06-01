@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+
+# Databases & audio recordings
+*.db
+*.wav
+
+# macOS
+.DS_Store
+
+# Secrets / local env
+.env
+.env.*
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS cruft
+*.swp
+electron.vite.config.*.mjs
+
+# Compiled native helpers (built from Swift sources via `npm run build:calendar` / `build:system-audio`)
+resources/calendar-helper
+resources/system-audio-capture
+
+# Legacy / unused
+python/
