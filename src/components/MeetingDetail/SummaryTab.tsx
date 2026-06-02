@@ -249,11 +249,24 @@ function TemplatePicker({
 
 export function SummaryTab({ meeting, progress, onRetry }: Props) {
   const [notionConfigured, setNotionConfigured] = useState(false)
+  const [transcribeLabel, setTranscribeLabel] = useState('Groq Whisper')
+  const [summaryLabel, setSummaryLabel] = useState('Claude Haiku')
 
   useEffect(() => {
     window.api.system
       .checkDependencies()
       .then(deps => setNotionConfigured(deps.notionConfigured))
+      .catch(() => {
+        /* silent */
+      })
+    window.api.settings
+      .get()
+      .then(s => {
+        setTranscribeLabel(
+          s.transcriptionProvider === 'mistral' ? 'Mistral Voxtral' : 'Groq Whisper'
+        )
+        setSummaryLabel(s.summaryProvider === 'mistral' ? 'Mistral' : 'Claude Haiku')
+      })
       .catch(() => {
         /* silent */
       })
@@ -282,7 +295,7 @@ export function SummaryTab({ meeting, progress, onRetry }: Props) {
     return (
       <div className="py-12">
         <p className="text-sm mb-4" style={{ color: '#8E8E93' }}>
-          Transcription en cours via Groq...
+          Transcription en cours via {transcribeLabel}...
         </p>
         {progress && (
           <>
@@ -312,7 +325,7 @@ export function SummaryTab({ meeting, progress, onRetry }: Props) {
           style={{ borderColor: '#1A1A1A', borderTopColor: 'transparent' }}
         />
         <p className="text-sm" style={{ color: '#8E8E93' }}>
-          Génération du résumé avec Claude Haiku...
+          Génération du résumé avec {summaryLabel}...
         </p>
       </div>
     )

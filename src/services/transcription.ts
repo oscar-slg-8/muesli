@@ -1,15 +1,39 @@
 // ============================================================
-// Service de transcription — Groq Whisper API
+// Service de transcription — provider sélectionnable
 //
-// Envoie chaque chunk WAV à l'API Groq (whisper-large-v3-turbo)
-// et retourne les segments avec timestamps.
-// Modèle : whisper-large-v3-turbo → qualité excellente, très rapide
-// Coût : ~$0.002/min (free tier : 2h audio/jour)
+// Deux fournisseurs, tous deux compatibles avec le contrat
+// OpenAI /audio/transcriptions (multipart, verbose_json) :
+//   - groq    : Whisper large-v3 (~$0.002/min, free tier 2h/jour)
+//   - mistral : Voxtral mini (transcription audio native Mistral)
+//
+// Whisper accepte un `prompt` d'amorçage (biais de vocabulaire) ;
+// Voxtral ne le supporte pas → on l'omet pour ce provider.
 // ============================================================
 
 import { readFileSync } from 'fs'
 import { basename } from 'path'
-import type { TranscriptSegment, DiarizationSegment, WordTimestamp } from '../types'
+import type {
+  TranscriptSegment,
+  DiarizationSegment,
+  WordTimestamp,
+  TranscriptionProvider
+} from '../types'
+
+interface ProviderConfig {
+  url: string
+  model: string
+}
+
+const PROVIDERS: Record<TranscriptionProvider, ProviderConfig> = {
+  groq: {
+    url: 'https://api.groq.com/openai/v1/audio/transcriptions',
+    model: 'whisper-large-v3'
+  },
+  mistral: {
+    url: 'https://api.mistral.ai/v1/audio/transcriptions',
+    model: 'voxtral-mini-latest'
+  }
+}
 
 interface GroqSegment {
   id: number
@@ -105,10 +129,20 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs =
 export class TranscriptionService {
   private apiKey: string = ''
   private language: string = 'fr'
+  private provider: TranscriptionProvider = 'groq'
 
-  configure(apiKey: string, language: string = 'fr'): void {
+  configure(
+    apiKey: string,
+    language: string = 'fr',
+    provider: TranscriptionProvider = 'groq'
+  ): void {
     this.apiKey = apiKey
     this.language = language
+    this.provider = provider
+  }
+
+  private get config(): ProviderConfig {
+    return PROVIDERS[this.provider]
   }
 
   isAvailable(): boolean {
@@ -134,32 +168,35 @@ export class TranscriptionService {
 
     const formData = new FormData()
     formData.append('file', blob, basename(wavPath))
-    formData.append('model', 'whisper-large-v3')
-    formData.append('response_format', 'verbose_json')
+    formData.append('model', this.config.model)
     formData.append('language', this.language)
     // temperature=0 : sortie déterministe → élimine les hallucinations sur silences/bruits.
-    // Sans ce paramètre, Whisper génère du texte aléatoire quand l'audio est peu clair.
     formData.append('temperature', '0')
 
-    // Prompt Whisper = vocabulaire de base (FR ou EN) + contexte spécifique à la réunion.
-    // Le prompt est utilisé comme texte d'amorçage pour le décodage (température=0) :
-    // les mots présents dans le prompt sont fortement favorisés → moins de phonétisation
-    // des anglicismes en français, meilleure reconnaissance des noms propres.
-    const vocabPrompt = this.language === 'en' ? ENGLISH_VOCAB_PROMPT : FRENCH_VOCAB_PROMPT
-    const contextLabel = this.language === 'en' ? 'Context' : 'Contexte'
-    const fullPrompt = this.promptContext
-      ? `${vocabPrompt}\n${contextLabel} : ${this.promptContext}`
-      : vocabPrompt
-    formData.append('prompt', fullPrompt)
+    if (this.provider === 'groq') {
+      // Whisper (Groq) : verbose_json fournit start/end + métriques de confiance,
+      // et `prompt` sert de biais de vocabulaire (anglicismes, noms propres).
+      formData.append('response_format', 'verbose_json')
+      const vocabPrompt = this.language === 'en' ? ENGLISH_VOCAB_PROMPT : FRENCH_VOCAB_PROMPT
+      const contextLabel = this.language === 'en' ? 'Context' : 'Contexte'
+      const fullPrompt = this.promptContext
+        ? `${vocabPrompt}\n${contextLabel} : ${this.promptContext}`
+        : vocabPrompt
+      formData.append('prompt', fullPrompt)
+    } else {
+      // Voxtral (Mistral) ne supporte pas `response_format` ; les timestamps de
+      // segment sont demandés explicitement via timestamp_granularities.
+      formData.append('timestamp_granularities', 'segment')
+    }
 
     const fileSizeKB = Math.round(buf.byteLength / 1024)
     console.log(
-      `[transcription] Envoi Groq : ${basename(wavPath)} (${fileSizeKB} KB, speaker=${speaker}, offset=${timeOffsetSeconds}s)`
+      `[transcription] Envoi ${this.provider} : ${basename(wavPath)} (${fileSizeKB} KB, speaker=${speaker}, offset=${timeOffsetSeconds}s)`
     )
 
     const data = await withRetry(async () => {
       const res = await fetchWithTimeout(
-        'https://api.groq.com/openai/v1/audio/transcriptions',
+        this.config.url,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${this.apiKey}` },
@@ -169,13 +206,13 @@ export class TranscriptionService {
       ) // 3 min max
       if (!res.ok) {
         const body = await res.text()
-        throw new Error(`Groq API erreur ${res.status}: ${body}`)
+        throw new Error(`${this.provider} API erreur ${res.status}: ${body}`)
       }
       return res.json() as Promise<GroqResponse>
     })
 
     console.log(
-      `[transcription] Groq réponse : ${data.segments?.length ?? 0} segments bruts, durée audio=${data.duration?.toFixed(1)}s`
+      `[transcription] ${this.provider} réponse : ${data.segments?.length ?? 0} segments bruts, durée audio=${data.duration?.toFixed(1) ?? '?'}s`
     )
 
     const thresholds = LANGUAGE_THRESHOLDS[this.language] ?? DEFAULT_THRESHOLDS
@@ -215,44 +252,69 @@ export class TranscriptionService {
 
     const formData = new FormData()
     formData.append('file', blob, basename(slicePath))
-    formData.append('model', 'whisper-large-v3')
-    formData.append('response_format', 'verbose_json')
-    formData.append('timestamp_granularities[]', 'word')
-    formData.append('timestamp_granularities[]', 'segment')
+    formData.append('model', this.config.model)
     formData.append('language', this.language)
     formData.append('temperature', '0')
-    const vocabPromptSlice = this.language === 'en' ? ENGLISH_VOCAB_PROMPT : FRENCH_VOCAB_PROMPT
-    const contextLabelSlice = this.language === 'en' ? 'Context' : 'Contexte'
-    formData.append(
-      'prompt',
-      this.promptContext
-        ? `${vocabPromptSlice}\n${contextLabelSlice} : ${this.promptContext}`
-        : vocabPromptSlice
-    )
+    formData.append('timestamp_granularities[]', 'word')
+    formData.append('timestamp_granularities[]', 'segment')
+
+    if (this.provider === 'groq') {
+      formData.append('response_format', 'verbose_json')
+      const vocabPromptSlice = this.language === 'en' ? ENGLISH_VOCAB_PROMPT : FRENCH_VOCAB_PROMPT
+      const contextLabelSlice = this.language === 'en' ? 'Context' : 'Contexte'
+      formData.append(
+        'prompt',
+        this.promptContext
+          ? `${vocabPromptSlice}\n${contextLabelSlice} : ${this.promptContext}`
+          : vocabPromptSlice
+      )
+    }
 
     const data = await withRetry(async () => {
       const res = await fetchWithTimeout(
-        'https://api.groq.com/openai/v1/audio/transcriptions',
+        this.config.url,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${this.apiKey}` },
           body: formData
         },
         30000
-      ) // 30s max par slice (courte durée, Groq répond en < 5s normalement)
+      ) // 30s max par slice (courte durée, réponse en < 5s normalement)
       if (!res.ok) {
         const body = await res.text()
-        throw new Error(`Groq API erreur ${res.status}: ${body}`)
+        throw new Error(`${this.provider} API erreur ${res.status}: ${body}`)
       }
       return res.json() as Promise<GroqVerboseResponse>
     })
 
-    return (data.words ?? []).map(w => ({
-      word: w.word,
-      start: w.start + seg.start,
-      end: w.end + seg.start,
-      probability: w.probability
-    }))
+    // Timestamps absolus de meeting = relatifs à la tranche + début du segment diarisé.
+    // Whisper renvoie un tableau `words` ; Voxtral ne le garantit pas → on retombe
+    // sur les `segments` (granularité phrase) puis sur le `text` global.
+    if (data.words && data.words.length > 0) {
+      return data.words.map(w => ({
+        word: w.word,
+        start: w.start + seg.start,
+        end: w.end + seg.start,
+        probability: w.probability ?? 1
+      }))
+    }
+
+    if (data.segments && data.segments.length > 0) {
+      return data.segments
+        .filter(s => s.text.trim().length > 0)
+        .map(s => ({
+          word: s.text.trim(),
+          start: s.start + seg.start,
+          end: s.end + seg.start,
+          probability: 1
+        }))
+    }
+
+    if (data.text && data.text.trim().length > 0) {
+      return [{ word: data.text.trim(), start: seg.start, end: seg.end, probability: 1 }]
+    }
+
+    return []
   }
 
   // Fusionne les segments consécutifs trop courts pour être des phrases complètes.

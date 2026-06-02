@@ -81,6 +81,7 @@ export function Settings({ onClose }: Props) {
               <div className="flex gap-3 flex-wrap">
                 <StatusBadge label="Groq" ok={deps.groqApiKey} />
                 <StatusBadge label="Anthropic" ok={deps.anthropicApiKey} />
+                <StatusBadge label="Mistral" ok={deps.mistralApiKey} />
                 <StatusBadge label="pyannote" ok={deps.pyannoteApiKey} />
                 <StatusBadge label="Notion" ok={deps.notionConfigured} />
                 <StatusBadge

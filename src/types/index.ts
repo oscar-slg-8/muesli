@@ -59,14 +59,20 @@ export interface TranscriptSegment {
   words?: WordTimestamp[]
 }
 
+export type TranscriptionProvider = 'groq' | 'mistral'
+export type SummaryProvider = 'anthropic' | 'mistral'
+
 export interface Settings {
   micDeviceId?: string
   speakerMeName: string
   speakerOthersName: string
   language: string
   summaryPrompt: string
+  transcriptionProvider: TranscriptionProvider
+  summaryProvider: SummaryProvider
   apiKeyGroq: string
   apiKeyAnthropic: string
+  apiKeyMistral: string
   apiKeyPyannote: string
   apiKeyNotion: string
   notionDatabaseId: string
@@ -89,8 +95,11 @@ Produis un résumé structuré en français avec :
 ## Actions à faire (avec responsable et deadline si mentionnés)
 ## Prochaines étapes
 Reste factuel. Si quelque chose n'est pas clair, indique "[peu clair dans l'audio]".`,
+  transcriptionProvider: 'groq',
+  summaryProvider: 'anthropic',
   apiKeyGroq: '',
   apiKeyAnthropic: '',
+  apiKeyMistral: '',
   apiKeyPyannote: '',
   apiKeyNotion: '',
   notionDatabaseId: '',
@@ -110,6 +119,7 @@ export interface PromptTemplate {
 export interface DependencyStatus {
   groqApiKey: boolean
   anthropicApiKey: boolean
+  mistralApiKey: boolean
   pyannoteApiKey: boolean
   notionConfigured: boolean
   /** true si macOS 14.2+ ET que le binaire system-audio-capture est présent */

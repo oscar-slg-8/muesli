@@ -304,9 +304,13 @@ export class PipelineManager {
     const meeting = database.getMeeting(meetingId)
     const meetingLanguage = meeting?.language ?? settings.language
 
-    transcription.configure(settings.apiKeyGroq, meetingLanguage)
+    const transcriptionKey =
+      settings.transcriptionProvider === 'mistral' ? settings.apiKeyMistral : settings.apiKeyGroq
+    const summaryKey =
+      settings.summaryProvider === 'mistral' ? settings.apiKeyMistral : settings.apiKeyAnthropic
+    transcription.configure(transcriptionKey, meetingLanguage, settings.transcriptionProvider)
     pyannote.configure(settings.apiKeyPyannote, meetingLanguage)
-    summarization.configure(settings.apiKeyAnthropic)
+    summarization.configure(summaryKey, settings.summaryProvider)
 
     const usePyannote = pyannote.isAvailable()
     console.log(
@@ -325,7 +329,7 @@ export class PipelineManager {
     if (!transcription.isAvailable()) {
       database.updateMeeting(meetingId, {
         status: 'error',
-        error_message: 'Clé API Groq manquante — configure-la dans les Réglages'
+        error_message: 'Clé API de transcription manquante — configure-la dans les Réglages'
       })
       this.sendToRenderer('meeting:updated', meetingId)
       return
@@ -548,7 +552,7 @@ export class PipelineManager {
         database.updateMeeting(meetingId, {
           status: 'complete',
           summary_markdown: summary,
-          summary_model: 'claude-haiku',
+          summary_model: summarization.modelLabel,
           title
         })
         this.cleanupAudioIfNeeded(meetingId)
@@ -571,7 +575,7 @@ export class PipelineManager {
         title: m?.title || `Réunion du ${new Date().toLocaleDateString('fr-FR')}`,
         error_message: summarization.isAvailable()
           ? undefined
-          : 'Clé API Anthropic manquante — résumé en attente'
+          : 'Clé API de résumé manquante — résumé en attente'
       })
       this.cleanupAudioIfNeeded(meetingId)
     }

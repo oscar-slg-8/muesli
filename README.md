@@ -2,7 +2,7 @@
 
 **A private, on-device meeting assistant for macOS** — records your meetings, transcribes them, identifies who said what, and writes a structured summary, without sending audio to any meeting platform or recording bot.
 
-Muesli runs entirely as a local desktop app. The only data that leaves your machine are the audio chunks sent to the speech and language model APIs you configure (Groq, pyannoteAI, Anthropic) — there is no Muesli backend, no account, and no telemetry.
+Muesli runs entirely as a local desktop app. Both the transcription and the summarization steps are **provider-agnostic**: you choose your models in Settings — Groq Whisper or **Mistral Voxtral** for speech-to-text, Anthropic Claude or **Mistral** for summaries. The only data that leaves your machine are the audio chunks sent to the APIs you configure (Groq, pyannoteAI, Anthropic, Mistral) — there is no Muesli backend, no account, and no telemetry.
 
 > 🇫🇷 _Version française plus bas — [aller à la section française](#muesli-fr)._
 
@@ -21,9 +21,9 @@ Most meeting-notes tools join the call as a visible bot or upload everything to 
 ## Features
 
 - **Local dual-stream capture** — microphone and system audio are recorded separately (stereo `chunk_NNN.wav`, L = you, R = the room) using the macOS 14.2+ Core Audio Process Tap, with an `ffmpeg`/BlackHole fallback.
-- **Transcription** — Groq Whisper (`whisper-large-v3`), chunked with voice-activity detection and loudness normalization to handle 90-minute meetings.
+- **Transcription** — selectable provider: Groq Whisper (`whisper-large-v3`) or **Mistral Voxtral** (`voxtral-mini`), chunked with voice-activity detection and loudness normalization to handle 90-minute meetings.
 - **Speaker diarization** — pyannoteAI assigns each segment to a speaker, then segments are re-transcribed per speaker and merged into a clean, attributed transcript.
-- **Summarization** — Anthropic Claude (`claude-haiku-4-5-20251001`) produces a structured summary; summary prompts are user-editable templates.
+- **Summarization** — selectable provider: Anthropic Claude (`claude-haiku-4-5-20251001`) or **Mistral** (`mistral-small-latest`) produces a structured summary; summary prompts are user-editable templates.
 - **Full-text search** — every transcript is indexed with SQLite FTS5.
 - **Calendar integration** — reads upcoming macOS Calendar events (EventKit) and pre-creates meetings with the right title and join link.
 - **Export** — push notes to Notion.
@@ -47,21 +47,32 @@ flowchart LR
         TAP[system-audio-capture<br/>Core Audio Process Tap]
         CAL[calendar-helper<br/>EventKit]
     end
-    subgraph Cloud["External APIs"]
-        GROQ[Groq Whisper]
+    subgraph Cloud["External APIs (selectable)"]
+        STT[Groq Whisper<br/>or Mistral Voxtral]
         PYAN[pyannoteAI]
-        ANTH[Anthropic Claude]
+        SUM[Anthropic Claude<br/>or Mistral]
     end
 
     UI -- window.api (Zod-validated IPC) --> ORCH
     ORCH --> TAP
     ORCH --> PIPE
-    PIPE -- transcribe --> GROQ
+    PIPE -- transcribe --> STT
     PIPE -- diarize --> PYAN
-    PIPE -- summarize --> ANTH
+    PIPE -- summarize --> SUM
     PIPE --> DB
     CAL --> ORCH
 ```
+
+### Pluggable model providers
+
+Transcription and summarization are each abstracted behind a small provider layer, so the underlying model is a runtime choice rather than a hardcoded dependency:
+
+| Stage          | Providers                                                                | Where to switch          |
+| -------------- | ------------------------------------------------------------------------ | ------------------------ |
+| Speech-to-text | **Groq** Whisper `whisper-large-v3` · **Mistral** Voxtral `voxtral-mini` | Settings → Transcription |
+| Summarization  | **Anthropic** Claude `claude-haiku-4-5` · **Mistral** `mistral-small`    | Settings → Résumé IA     |
+
+Each provider is a single configurable client (`src/services/transcription.ts`, `src/services/summarization.ts`) selected by the `transcriptionProvider` / `summaryProvider` settings, so adding a new model is a matter of extending the provider map — no pipeline changes required.
 
 **Transcription pipeline** (`electron/recording/PipelineManager.ts`):
 
@@ -86,17 +97,17 @@ The interesting part of Muesli is not calling three model APIs — it's making t
 
 ## Tech stack
 
-| Layer          | Choice                                          |
-| -------------- | ----------------------------------------------- |
-| Shell          | Electron 32 (Node 20 / Chromium)                |
-| UI             | React 18 + TypeScript + Tailwind CSS            |
-| Storage        | better-sqlite3 with FTS5                        |
-| Validation     | Zod (all IPC)                                   |
-| Speech-to-text | Groq Whisper `whisper-large-v3`                 |
-| Diarization    | pyannoteAI                                      |
-| Summarization  | Anthropic Claude `claude-haiku-4-5-20251001`    |
-| Native helpers | Swift (Core Audio Process Tap, EventKit)        |
-| Tooling        | electron-vite, ESLint, Prettier, GitHub Actions |
+| Layer          | Choice                                                                                        |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| Shell          | Electron 32 (Node 20 / Chromium)                                                              |
+| UI             | React 18 + TypeScript + Tailwind CSS                                                          |
+| Storage        | better-sqlite3 with FTS5                                                                      |
+| Validation     | Zod (all IPC)                                                                                 |
+| Speech-to-text | Groq Whisper `whisper-large-v3` _or_ Mistral Voxtral (selectable)                             |
+| Diarization    | pyannoteAI                                                                                    |
+| Summarization  | Anthropic Claude `claude-haiku-4-5-20251001` _or_ Mistral `mistral-small-latest` (selectable) |
+| Native helpers | Swift (Core Audio Process Tap, EventKit)                                                      |
+| Tooling        | electron-vite, ESLint, Prettier, GitHub Actions                                               |
 
 ## Getting started
 
@@ -116,6 +127,7 @@ Add your API keys in **Settings** (stored encrypted in the macOS Keychain):
 - **Groq** — transcription, free tier available · [console.groq.com](https://console.groq.com)
 - **pyannoteAI** — speaker diarization · [pyannote.ai](https://www.pyannote.ai)
 - **Anthropic** — summaries, ~$0.01/meeting · [console.anthropic.com](https://console.anthropic.com)
+- **Mistral** _(optional)_ — alternative transcription (Voxtral) and summary (Mistral Small) provider, selectable in Settings · [console.mistral.ai](https://console.mistral.ai)
 
 ### Development
 
@@ -138,14 +150,14 @@ These four checks are the CI gate (`.github/workflows/ci.yml`). See [`CONTRIBUTI
 
 **Un assistant de réunion privé et local pour macOS** — enregistre vos réunions, les transcrit, identifie qui a parlé, et rédige un résumé structuré, sans bot visible et sans backend distant.
 
-Muesli est une application de bureau **100 % locale** : aucun compte, aucune télémétrie, aucun serveur Muesli. Les seules données qui quittent votre machine sont les extraits audio envoyés aux API que vous configurez (Groq, pyannoteAI, Anthropic).
+Muesli est une application de bureau **100 % locale** : aucun compte, aucune télémétrie, aucun serveur Muesli. La transcription et le résumé sont **indépendants du fournisseur** : vous choisissez vos modèles dans les Réglages — Groq Whisper ou **Mistral Voxtral** pour la transcription, Anthropic Claude ou **Mistral** pour le résumé. Les seules données qui quittent votre machine sont les extraits audio envoyés aux API que vous configurez (Groq, pyannoteAI, Anthropic, Mistral).
 
 ### Fonctionnalités
 
 - **Capture double flux locale** — micro et audio système enregistrés séparément (`chunk_NNN.wav` stéréo : G = vous, D = la salle) via le _Process Tap_ Core Audio (macOS 14.2+), avec repli `ffmpeg`/BlackHole.
-- **Transcription** — Groq Whisper (`whisper-large-v3`), découpée avec détection d'activité vocale et normalisation pour gérer des réunions de 90 minutes.
+- **Transcription** — fournisseur au choix : Groq Whisper (`whisper-large-v3`) ou **Mistral Voxtral** (`voxtral-mini`), découpée avec détection d'activité vocale et normalisation pour gérer des réunions de 90 minutes.
 - **Diarisation** — pyannoteAI attribue chaque segment à un locuteur, puis re-transcription par locuteur et fusion en une transcription attribuée.
-- **Résumé** — Claude (`claude-haiku-4-5-20251001`), avec des modèles de prompt modifiables.
+- **Résumé** — fournisseur au choix : Claude (`claude-haiku-4-5-20251001`) ou **Mistral** (`mistral-small-latest`), avec des modèles de prompt modifiables.
 - **Recherche plein texte** — chaque transcription est indexée avec SQLite FTS5.
 - **Calendrier** — lecture des événements macOS (EventKit) et pré-création des réunions.
 - **Export Notion**.
@@ -175,7 +187,7 @@ npm run rebuild
 npm run dev
 ```
 
-Renseignez vos clés API dans **Réglages** (chiffrées dans le Trousseau macOS) : Groq (transcription), pyannoteAI (diarisation), Anthropic (résumés).
+Renseignez vos clés API dans **Réglages** (chiffrées dans le Trousseau macOS) : Groq (transcription), pyannoteAI (diarisation), Anthropic (résumés). **Mistral** est proposé en option (Voxtral pour la transcription, Mistral Small pour le résumé), sélectionnable dans les Réglages.
 
 ---
 

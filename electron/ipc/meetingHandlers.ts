@@ -212,7 +212,9 @@ export function register(deps: MeetingDeps): void {
       if (!meeting) return
       const segments = database.getSegments(meetingId)
       const settings = settingsManager.getSettings()
-      summarization.configure(settings.apiKeyAnthropic)
+      const summaryKey =
+        settings.summaryProvider === 'mistral' ? settings.apiKeyMistral : settings.apiKeyAnthropic
+      summarization.configure(summaryKey, settings.summaryProvider)
 
       let summaryPrompt = settings.summaryPrompt
       if (templateId !== undefined) {
@@ -239,7 +241,7 @@ export function register(deps: MeetingDeps): void {
         database.updateMeeting(meetingId, {
           status: 'complete',
           summary_markdown: summary,
-          summary_model: 'claude-haiku',
+          summary_model: summarization.modelLabel,
           error_message: null
         })
         pipelineManager.cleanupAudioIfNeeded(meetingId)
@@ -354,6 +356,7 @@ export function register(deps: MeetingDeps): void {
     return {
       groqApiKey: settings.apiKeyGroq.length > 0,
       anthropicApiKey: settings.apiKeyAnthropic.length > 0,
+      mistralApiKey: settings.apiKeyMistral.length > 0,
       pyannoteApiKey: settings.apiKeyPyannote.length > 0,
       notionConfigured: settings.apiKeyNotion.length > 0 && settings.notionDatabaseId.length > 0,
       processTapAvailable,

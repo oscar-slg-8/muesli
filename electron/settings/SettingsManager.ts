@@ -14,6 +14,7 @@ import type { Settings } from '../../src/types'
 export const SENSITIVE_KEYS = new Set([
   'apiKeyGroq',
   'apiKeyAnthropic',
+  'apiKeyMistral',
   'apiKeyPyannote',
   'apiKeyNotion'
 ])

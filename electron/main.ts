@@ -224,13 +224,26 @@ app.whenReady().then(() => {
     if (!dirPath || !existsSync(dirPath))
       return new Response('Fichier introuvable', { status: 404 })
 
-    const prefix = stream === 'me' ? 'me_chunk_' : 'others_chunk_'
-    const chunks = readdirSync(dirPath)
-      .filter(f => f.startsWith(prefix) && f.endsWith('.wav'))
+    // Deux formats supportés :
+    //   - nouveau : chunk_NNN.wav stéréo (L=micro/me, R=système/others)
+    //   - legacy  : me_chunk_NNN.wav / others_chunk_NNN.wav (mono séparés)
+    // Les chunks stéréo sont prioritaires ; on en extrait le canal demandé.
+    const all = readdirSync(dirPath)
+    const stereoChunks = all
+      .filter(f => /^chunk_\d+\.wav$/.test(f))
+      .sort()
+      .map(f => join(dirPath, f))
+    const legacyPrefix = stream === 'me' ? 'me_chunk_' : 'others_chunk_'
+    const legacyChunks = all
+      .filter(f => f.startsWith(legacyPrefix) && f.endsWith('.wav'))
       .sort()
       .map(f => join(dirPath, f))
 
+    const chunks = stereoChunks.length > 0 ? stereoChunks : legacyChunks
     if (chunks.length === 0) return new Response('Aucun chunk audio', { status: 404 })
+
+    // Canal à extraire d'un chunk stéréo : me = gauche (0), others = droite (1).
+    const wantChannel = stream === 'others' ? 1 : 0
 
     const WAV_HEADER_SIZE = 44
     const pcmParts: Buffer[] = []
@@ -239,10 +252,24 @@ app.whenReady().then(() => {
     for (const chunkPath of chunks) {
       const data = readFileSync(chunkPath)
       if (data.length <= WAV_HEADER_SIZE) continue
+      const numChannels = data.readUInt16LE(22)
       if (pcmParts.length === 0) {
         sampleRate = data.readUInt32LE(24)
       }
-      pcmParts.push(data.subarray(WAV_HEADER_SIZE))
+      const pcm = data.subarray(WAV_HEADER_SIZE)
+      if (numChannels === 2) {
+        // Désentrelacer le PCM 16-bit stéréo → mono (canal demandé).
+        const frameCount = Math.floor(pcm.length / 4)
+        const mono = Buffer.alloc(frameCount * 2)
+        const byteOffset = wantChannel * 2
+        for (let i = 0; i < frameCount; i++) {
+          mono[i * 2] = pcm[i * 4 + byteOffset]
+          mono[i * 2 + 1] = pcm[i * 4 + byteOffset + 1]
+        }
+        pcmParts.push(mono)
+      } else {
+        pcmParts.push(pcm)
+      }
     }
 
     const pcmData = Buffer.concat(pcmParts)

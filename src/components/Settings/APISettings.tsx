@@ -1,10 +1,44 @@
-// Réglages des clés API — Groq + Anthropic
+// Réglages des clés API + choix des fournisseurs (provider sélectionnable)
 import { useState } from 'react'
 import type { Settings } from '../../types'
 
 interface Props {
   settings: Settings
   onUpdate: (partial: Partial<Settings>) => Promise<void>
+}
+
+function ProviderToggle<T extends string>({
+  label,
+  value,
+  options,
+  onChange
+}: {
+  label: string
+  value: T
+  options: Array<{ value: T; label: string }>
+  onChange: (v: T) => void
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-stone-700 mb-1.5">{label}</label>
+      <div className="inline-flex p-0.5 bg-stone-100 rounded-xl border border-stone-200">
+        {options.map(opt => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+              value === opt.value
+                ? 'bg-white text-stone-900 shadow-sm'
+                : 'text-stone-500 hover:text-stone-700'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function MaskedInput({
@@ -57,6 +91,32 @@ export function APISettings({ settings, onUpdate }: Props) {
       </div>
 
       <div className="space-y-5">
+        {/* Choix des fournisseurs */}
+        <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100 space-y-4">
+          <ProviderToggle
+            label="Fournisseur — Transcription"
+            value={settings.transcriptionProvider}
+            options={[
+              { value: 'groq', label: 'Groq Whisper' },
+              { value: 'mistral', label: 'Mistral Voxtral' }
+            ]}
+            onChange={v => onUpdate({ transcriptionProvider: v })}
+          />
+          <ProviderToggle
+            label="Fournisseur — Résumé IA"
+            value={settings.summaryProvider}
+            options={[
+              { value: 'anthropic', label: 'Anthropic Claude' },
+              { value: 'mistral', label: 'Mistral' }
+            ]}
+            onChange={v => onUpdate({ summaryProvider: v })}
+          />
+          <p className="text-xs text-stone-400">
+            Mistral nécessite une clé ci-dessous. La clé du fournisseur non sélectionné peut rester
+            vide.
+          </p>
+        </div>
+
         {/* Groq */}
         <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100">
           <div className="flex items-center gap-2 mb-3">
@@ -90,6 +150,26 @@ export function APISettings({ settings, onUpdate }: Props) {
             placeholder="sk-ant-..."
             hint="~$0.01 par réunion d'1h. Modèle : Claude Haiku."
             onChange={v => onUpdate({ apiKeyAnthropic: v })}
+          />
+        </div>
+
+        {/* Mistral */}
+        <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100">
+          <div className="flex items-center gap-2 mb-3">
+            <div
+              className={`w-2 h-2 rounded-full ${settings.apiKeyMistral ? 'bg-emerald-400' : 'bg-stone-300'}`}
+            />
+            <span className="text-sm font-medium text-stone-700">
+              Mistral — Transcription &amp; Résumé
+            </span>
+            <span className="ml-auto text-xs text-stone-400">console.mistral.ai</span>
+          </div>
+          <MaskedInput
+            label=""
+            value={settings.apiKeyMistral}
+            placeholder="..."
+            hint="Voxtral (transcription) et Mistral Small (résumé). Sélectionne Mistral ci-dessus pour l'utiliser."
+            onChange={v => onUpdate({ apiKeyMistral: v })}
           />
         </div>
 

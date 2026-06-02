@@ -1,28 +1,45 @@
 // ============================================================
-// Service de résumé IA — Anthropic Claude Haiku API
+// Service de résumé IA — provider sélectionnable
 //
-// Envoie la transcription à Claude Haiku (claude-haiku-4-5-20251001)
-// et récupère un résumé structuré.
-// Coût : ~$0.01 par réunion d'1h
+// Deux fournisseurs interchangeables :
+//   - anthropic : Claude Haiku (claude-haiku-4-5-20251001), ~$0.01/réunion 1h
+//   - mistral   : Mistral Small (mistral-small-latest), ~$0.002/réunion 1h
+//
+// Les deux reçoivent le même prompt ; seul l'appel HTTP diffère.
 // ============================================================
 
-import type { TranscriptSegment } from '../types'
+import type { SummaryProvider, TranscriptSegment } from '../types'
 
 interface AnthropicResponse {
   content: Array<{ type: string; text: string }>
   usage: { input_tokens: number; output_tokens: number }
 }
 
+interface MistralChatResponse {
+  choices: Array<{ message: { content: string } }>
+}
+
+const MODELS: Record<SummaryProvider, string> = {
+  anthropic: 'claude-haiku-4-5-20251001',
+  mistral: 'mistral-small-latest'
+}
+
 export class SummarizationService {
   private apiKey: string = ''
-  private model: string = 'claude-haiku-4-5-20251001'
+  private provider: SummaryProvider = 'anthropic'
 
-  configure(apiKey: string): void {
+  configure(apiKey: string, provider: SummaryProvider = 'anthropic'): void {
     this.apiKey = apiKey
+    this.provider = provider
   }
 
   isAvailable(): boolean {
     return this.apiKey.length > 0
+  }
+
+  /** Étiquette courte du modèle utilisé, persistée en base (summary_model). */
+  get modelLabel(): string {
+    return this.provider === 'mistral' ? 'mistral-small' : 'claude-haiku'
   }
 
   async summarize(
@@ -91,7 +108,7 @@ ${userNotes.trim()}`
 Transcription :
 ${transcript}`
 
-    return this.callClaude(content)
+    return this.complete(content)
   }
 
   private async summarizeLong(
@@ -116,7 +133,7 @@ ${transcript}`
 
     const partialSummaries: string[] = []
     for (let i = 0; i < blocks.length; i++) {
-      const partial = await this.callClaude(
+      const partial = await this.complete(
         `Résume cette partie (${i + 1}/${blocks.length}) d'une transcription de réunion en conservant les points clés, décisions et actions :\n\n${blocks[i]}`
       )
       partialSummaries.push(partial)
@@ -134,23 +151,40 @@ ${transcript}`
     )
   }
 
-  private async callClaude(content: string): Promise<string> {
+  private complete(content: string): Promise<string> {
+    return this.provider === 'mistral' ? this.callMistral(content) : this.callClaude(content)
+  }
+
+  // AbortSignal.timeout() est peu fiable dans le processus principal d'Electron :
+  // on utilise AbortController + setTimeout natif (voir transcription.ts).
+  private fetchWithTimeout(
+    url: string,
+    options: RequestInit,
+    timeoutMs: number
+  ): Promise<Response> {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(new Error('fetch timeout')), 120000)
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01'
+    const timer = setTimeout(() => controller.abort(new Error('fetch timeout')), timeoutMs)
+    return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer))
+  }
+
+  private async callClaude(content: string): Promise<string> {
+    const res = await this.fetchWithTimeout(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: MODELS.anthropic,
+          max_tokens: 2048,
+          messages: [{ role: 'user', content }]
+        })
       },
-      body: JSON.stringify({
-        model: this.model,
-        max_tokens: 2048,
-        messages: [{ role: 'user', content }]
-      }),
-      signal: controller.signal
-    }).finally(() => clearTimeout(timer))
+      120000
+    )
 
     if (!res.ok) {
       const body = await res.text()
@@ -172,6 +206,41 @@ ${transcript}`
 
     const data = (await res.json()) as AnthropicResponse
     return data.content[0]?.text || ''
+  }
+
+  // Mistral expose une API chat completions compatible OpenAI.
+  private async callMistral(content: string): Promise<string> {
+    const res = await this.fetchWithTimeout(
+      'https://api.mistral.ai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: MODELS.mistral,
+          max_tokens: 2048,
+          messages: [{ role: 'user', content }]
+        })
+      },
+      120000
+    )
+
+    if (!res.ok) {
+      const body = await res.text()
+      console.error('[summarization] Mistral error', res.status, body)
+      if (res.status === 401)
+        throw new Error('Clé API Mistral invalide — vérifie-la dans les Réglages')
+      if (res.status === 402)
+        throw new Error('Crédit Mistral insuffisant — vérifie ton compte sur console.mistral.ai')
+      if (res.status === 429)
+        throw new Error('Limite de requêtes Mistral atteinte — réessaie dans quelques secondes')
+      throw new Error(`Mistral API erreur ${res.status}: ${body.slice(0, 300)}`)
+    }
+
+    const data = (await res.json()) as MistralChatResponse
+    return data.choices[0]?.message?.content || ''
   }
 
   private formatTranscript(
