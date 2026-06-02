@@ -13,7 +13,7 @@ npm run rebuild     # rebuild better-sqlite3 against the Electron ABI
 npm run dev         # launch in dev mode (renderer hot-reloads)
 ```
 
-After changing anything under `electron/` (main process), run `npm run build` and relaunch — the main process does not hot-reload.
+After changing anything under `electron/` (main process), run `npm run build` and relaunch, the main process does not hot-reload.
 
 ## Quality gates
 
@@ -36,5 +36,5 @@ npm run format
 ## Conventions
 
 - Commits follow Conventional Commits (`feat:`, `fix:`, `chore:`, `refactor:`, …).
-- All IPC handlers must go through `safeHandle(channel, schema, fn)` with a Zod schema — never register raw `ipcMain` handlers.
+- All IPC handlers must go through `safeHandle(channel, schema, fn)` with a Zod schema, never register raw `ipcMain` handlers.
 - Add database migrations sequentially under `migrations/`; never edit an existing migration.

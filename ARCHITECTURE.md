@@ -1,4 +1,4 @@
-# ARCHITECTURE — Muesli
+# ARCHITECTURE: Muesli
 
 > Application macOS de prise de notes de réunions, 100% locale, invisible pour les interlocuteurs.
 
@@ -29,7 +29,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                       Muesli — macOS                           │
+│                       Muesli - macOS                           │
 │                                                                 │
 │  "Enregistre, transcrit et résume tes réunions sans que         │
 │   personne ne le sache. Tout reste sur ton Mac."                │
@@ -51,7 +51,7 @@
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Pourquoi Electron | Seul framework cross-plateforme mature offrant un accès complet aux API natives macOS (tray, raccourcis globaux, périphériques audio) tout en utilisant React pour l'UI. Tauri serait plus léger mais son écosystème audio natif est immature et la gestion des binaires natifs (whisper.cpp) y est plus complexe. |
 | Version 32+       | Support ESM natif, `contextIsolation: true` par défaut, API `safeStorage` pour chiffrement des préférences.                                                                                                                                                                                                        |
-| Isolation         | `contextIsolation: true` + `nodeIntegration: false` — le renderer n'a AUCUN accès à Node.js. Toute communication passe par `contextBridge` dans `preload.ts`.                                                                                                                                                      |
+| Isolation         | `contextIsolation: true` + `nodeIntegration: false`, le renderer n'a AUCUN accès à Node.js. Toute communication passe par `contextBridge` dans `preload.ts`.                                                                                                                                                       |
 
 ### Frontend : React 18 + TypeScript strict + Tailwind CSS
 
@@ -94,7 +94,7 @@
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Ollama          | Serveur d'inférence local, installation simple (`brew install ollama`), API HTTP standard. Gère le chargement/déchargement des modèles automatiquement.                                                                                                     |
 | Mistral (7B)    | Excellent en français (modèle français), contexte 8K tokens suffisant pour un résumé, tourne en ~4GB de RAM sur Apple Silicon. Alternative : Llama 3.1 8B (meilleur en anglais, un peu moins bon en français). Le choix est configurable dans les Settings. |
-| API HTTP locale | `http://localhost:11434/api/generate` — requête POST standard. Pas de binding natif, pas de dépendance lourde. Si Ollama ne répond pas, la transcription reste disponible et le résumé est mis en attente.                                                  |
+| API HTTP locale | `http://localhost:11434/api/generate`, requête POST standard. Pas de binding natif, pas de dépendance lourde. Si Ollama ne répond pas, la transcription reste disponible et le résumé est mis en attente.                                                   |
 
 ### Base de données : better-sqlite3
 
@@ -192,7 +192,7 @@
 │  │  │ Durée       │  │                                            │ │    │
 │  │  │ Titre       │  │  ┌──────────────────────────────────────┐  │ │    │
 │  │  │             │  │  │ Barre de progression transcription   │  │ │    │
-│  │  │             │  │  │ Chunk 3/9 — ~4 min restantes         │  │ │    │
+│  │  │             │  │  │ Chunk 3/9 - ~4 min restantes         │  │ │    │
 │  │  │             │  │  └──────────────────────────────────────┘  │ │    │
 │  │  └─────────────┘  └──────────────────────────────────────────┘ │    │
 │  │                                                                 │    │
@@ -219,7 +219,7 @@
 
 ## 4. Flux de données de bout en bout
 
-### 4.1 — Phase d'enregistrement
+### 4.1: Phase d'enregistrement
 
 ```
 Micro (AirPods/Mac)──► node-audiorecorder ──► me_chunk_001.wav (10 min)
@@ -235,7 +235,7 @@ Taille : ~18.75 MB par chunk de 10 min (16000 × 2 bytes × 600s)
 Taille max pour 90 min : ~170 MB par flux, ~340 MB total
 ```
 
-### 4.2 — Phase de transcription (après arrêt de l'enregistrement)
+### 4.2: Phase de transcription (après arrêt de l'enregistrement)
 
 ```
 me_chunk_001.wav ──────────────────────┐
@@ -261,7 +261,7 @@ me_chunk_002.wav ─────────────────────
 Même processus pour others_chunk_XXX.wav → segments timestampés séparés
 ```
 
-### 4.3 — Phase de diarisation (alignement)
+### 4.3: Phase de diarisation (alignement)
 
 ```
 Segments "MOI"             Segments "EUX"
@@ -289,13 +289,13 @@ Segments "MOI"             Segments "EUX"
                  │
                  ▼
        Transcription unifiée :
-       [MOI] 00:00:00 — "Bonjour, on commence ?"
-       [EUX] 00:00:02 — "Oui, allons-y."
-       [MOI] 00:00:05 — "Premier point : le budget..."
-       [EUX] 00:00:08 — "J'ai les chiffres ici."
+       [MOI] 00:00:00 - "Bonjour, on commence ?"
+       [EUX] 00:00:02 - "Oui, allons-y."
+       [MOI] 00:00:05 - "Premier point : le budget..."
+       [EUX] 00:00:08 - "J'ai les chiffres ici."
 ```
 
-### 4.4 — Phase de résumé
+### 4.4: Phase de résumé
 
 ```
 Transcription unifiée
@@ -337,7 +337,7 @@ Transcription unifiée
        sauvegardé dans SQLite
 ```
 
-### 4.5 — Gestion du contexte long (réunions > 30 min)
+### 4.5: Gestion du contexte long (réunions > 30 min)
 
 Mistral 7B a un contexte de 8K tokens (~6000 mots). Une réunion de 90 minutes
 peut produire ~15 000 mots de transcription. Stratégie :
@@ -374,7 +374,7 @@ Transcription complète (15 000 mots)
 
 ## 5. Architecture de diarisation deux flux
 
-### 5.1 — Capture parallèle
+### 5.1: Capture parallèle
 
 ```typescript
 // Pseudo-code simplifié
@@ -392,7 +392,7 @@ Chaque chunk de 10 minutes est nommé :
 - `{meetingId}_me_chunk_{index}.wav`
 - `{meetingId}_others_chunk_{index}.wav`
 
-### 5.2 — Alignement temporel
+### 5.2: Alignement temporel
 
 Les timestamps whisper sont relatifs au début du fichier WAV.
 Pour obtenir des timestamps absolus :
@@ -415,7 +415,7 @@ Si similarité > 80% (distance de Levenshtein normalisée),
 garder uniquement le segment du chunk N (celui qui a plus de contexte).
 ```
 
-### 5.3 — Merge des deux flux
+### 5.3: Merge des deux flux
 
 ```
 Entrée :
@@ -432,7 +432,7 @@ Algorithme :
   3. Trier par timestamp "start" croissant
 
   4. En cas de chevauchement (start_B < end_A) :
-     → NE PAS supprimer — garder les deux segments
+     → NE PAS supprimer - garder les deux segments
      → L'UI affichera les deux avec un indicateur visuel
        de parole simultanée
 
@@ -444,7 +444,7 @@ Sortie :
 
 ## 6. Gestion des fichiers longs (90 min)
 
-### 6.1 — Rolling buffer sur disque
+### 6.1: Rolling buffer sur disque
 
 ```
 Pendant l'enregistrement :
@@ -463,7 +463,7 @@ Chunk 3 :               [19:00 ──── 29:00]
 ...
 ```
 
-### 6.2 — Transcription séquentielle
+### 6.2: Transcription séquentielle
 
 ```
 Pourquoi séquentiel et pas parallèle :
@@ -479,10 +479,10 @@ Ordre de traitement :
   → others_chunk_1 → others_chunk_2 → ... → others_chunk_9
 
 Progression affichée :
-  "Transcription en cours : chunk 3/18 — ~10 minutes restantes"
+  "Transcription en cours : chunk 3/18 - ~10 minutes restantes"
 ```
 
-### 6.3 — Budget mémoire
+### 6.3: Budget mémoire
 
 ```
 Composant                    RAM estimée
@@ -511,7 +511,7 @@ Séquencement : Enregistrement → Transcription (whisper) → Résumé (Ollama)
 
 ## 7. Base de données SQLite
 
-### 7.1 — Schéma complet
+### 7.1: Schéma complet
 
 ```sql
 -- Migration 001_initial.sql
@@ -616,7 +616,7 @@ CREATE TABLE meeting_speakers (
 );
 ```
 
-### 7.2 — Stratégie de migration
+### 7.2: Stratégie de migration
 
 ```
 migrations/
@@ -643,7 +643,7 @@ Au démarrage de l'app :
 
 ## 8. Stratégie de gestion des erreurs
 
-### 8.1 — Matrice des erreurs par composant
+### 8.1: Matrice des erreurs par composant
 
 ```
 ┌──────────────────┬──────────────────────┬─────────────────────────┬─────────────┐
@@ -712,7 +712,7 @@ Au démarrage de l'app :
 └──────────────────┴──────────────────────┴─────────────────────────┴─────────────┘
 ```
 
-### 8.2 — Pattern de gestion d'erreur
+### 8.2: Pattern de gestion d'erreur
 
 Chaque service expose des résultats typés, jamais d'exceptions non attrapées :
 
@@ -728,7 +728,7 @@ type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E }
 
 ## 9. Décisions de performance
 
-### 9.1 — Enregistrement audio
+### 9.1: Enregistrement audio
 
 | Décision                    | Raison                                                                                              |
 | --------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -737,7 +737,7 @@ type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E }
 | Écriture directe sur disque | Pas de buffer en mémoire au-delà du chunk en cours. Si RAM < 8GB, critique.                         |
 | Deux processus sox séparés  | Isolés l'un de l'autre. Si un flux plante, l'autre continue.                                        |
 
-### 9.2 — Transcription
+### 9.2: Transcription
 
 | Décision                     | Raison                                                                                         |
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -746,7 +746,7 @@ type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E }
 | Overlap 30s                  | Couvre la phrase la plus longue raisonnablement attendue.                                      |
 | Déduplication par similarité | Levenshtein normalisé > 80% = même phrase. Simple, efficace, pas de faux positifs en pratique. |
 
-### 9.3 — Interface
+### 9.3: Interface
 
 | Décision                   | Raison                                                                                                             |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -815,7 +815,7 @@ Content-Security-Policy :
 
 ## 11. Plan de migration des dépendances
 
-### 11.1 — Si whisper.cpp est remplacé
+### 11.1: Si whisper.cpp est remplacé
 
 ```
 Situation : nodejs-whisper abandonné ou whisper.cpp remplacé par un meilleur moteur.
@@ -837,7 +837,7 @@ Candidats potentiels :
   - Whisper.cpp successeur
 ```
 
-### 11.2 — Si Ollama est remplacé
+### 11.2: Si Ollama est remplacé
 
 ```
 Situation : Ollama abandonné ou API modifiée.
@@ -855,7 +855,7 @@ Migration :
   4. Ajouter un sélecteur "backend LLM" dans Settings
 ```
 
-### 11.3 — Si better-sqlite3 pose problème
+### 11.3: Si better-sqlite3 pose problème
 
 ```
 Situation : Incompatibilité ARM ou abandon du package.
@@ -867,7 +867,7 @@ Migration :
   4. Seul database.ts change
 ```
 
-### 11.4 — Si Electron est remplacé
+### 11.4: Si Electron est remplacé
 
 ```
 Situation : Migration vers Tauri ou une app native.
@@ -888,7 +888,7 @@ Impact minimal grâce à la séparation :
 muesli/
 ├── electron/
 │   ├── main.ts                  # Process principal, création fenêtre, IPC handlers
-│   ├── preload.ts               # contextBridge — API exposée au renderer
+│   ├── preload.ts               # contextBridge - API exposée au renderer
 │   └── tray.ts                  # Icône barre de menu, raccourcis globaux
 │
 ├── src/
@@ -948,7 +948,7 @@ muesli/
 
 ---
 
-## Annexe A — Dépendances externes à installer
+## Annexe A: Dépendances externes à installer
 
 L'utilisateur devra installer ces outils avant de lancer l'app.
 Le README fournira des instructions pas à pas.
@@ -966,7 +966,7 @@ Le README fournira des instructions pas à pas.
 
 ---
 
-## Annexe B — Configuration audio macOS requise
+## Annexe B: Configuration audio macOS requise
 
 ```
 Pour capturer l'audio système (ce que disent les interlocuteurs),
@@ -986,7 +986,7 @@ L'app capture BlackHole = elle entend ce que les interlocuteurs disent.
 
 ---
 
-## Annexe C — Prompt système par défaut pour le résumé
+## Annexe C: Prompt système par défaut pour le résumé
 
 ```
 Tu es un assistant spécialisé dans la prise de notes de réunions.
