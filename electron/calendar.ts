@@ -27,15 +27,27 @@ let cacheTimestamp = 0
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 function getHelperPath(): string {
-  // En dev : resources/calendar-helper (à la racine du projet)
-  // En prod : process.resourcesPath/calendar-helper
-  const devPath = join(app.getAppPath(), 'resources', 'calendar-helper')
-  if (existsSync(devPath)) return devPath
+  // Le helper est désormais empaqueté dans un .app afin de porter un Info.plist
+  // (descriptions d'usage Calendrier). Sans ça, EventKit refuse l'accès sur
+  // macOS 14+. On exécute le binaire interne ; Bundle.main résout vers le .app
+  // et EventKit y lit NSCalendarsFullAccessUsageDescription.
+  const bundleRel = join('CalendarHelper.app', 'Contents', 'MacOS', 'calendar-helper')
 
-  const prodPath = join(process.resourcesPath, 'calendar-helper')
-  if (existsSync(prodPath)) return prodPath
+  // En dev : resources/CalendarHelper.app (racine du projet)
+  const devBundle = join(app.getAppPath(), 'resources', bundleRel)
+  if (existsSync(devBundle)) return devBundle
 
-  return devPath // Fallback — laissera une erreur claire
+  // En prod : process.resourcesPath/CalendarHelper.app
+  const prodBundle = join(process.resourcesPath, bundleRel)
+  if (existsSync(prodBundle)) return prodBundle
+
+  // Fallback legacy : binaire nu (anciens packages)
+  const devLegacy = join(app.getAppPath(), 'resources', 'calendar-helper')
+  if (existsSync(devLegacy)) return devLegacy
+  const prodLegacy = join(process.resourcesPath, 'calendar-helper')
+  if (existsSync(prodLegacy)) return prodLegacy
+
+  return devBundle // Fallback — laissera une erreur claire
 }
 
 export async function getCalendarEvents(forceRefresh = false): Promise<CalendarEvent[]> {

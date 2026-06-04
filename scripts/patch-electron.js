@@ -32,6 +32,29 @@ if (fs.existsSync(MUESLI_ICNS)) {
   console.log('[patch-electron] Icône ✓')
 }
 
+// 1bis. Toujours garantir les descriptions d'usage Confidentialité (idempotent).
+// Sans NSCalendarsFullAccessUsageDescription, EventKit refuse l'accès sur
+// macOS 14+ (granted=false, aucun prompt). Nécessaire en dev pour que le
+// helper calendrier puisse demander l'autorisation au nom de Muesli.
+{
+  const APP_PLIST = path.join(APP, 'Contents', 'Info.plist')
+  const usageKeys = {
+    NSCalendarsFullAccessUsageDescription:
+      'Muesli lit vos événements pour vous proposer de rejoindre et enregistrer vos réunions.',
+    NSCalendarsUsageDescription:
+      'Muesli lit vos événements pour vous proposer de rejoindre et enregistrer vos réunions.',
+    NSMicrophoneUsageDescription: 'Muesli enregistre le micro pendant vos réunions.'
+  }
+  try {
+    for (const [key, val] of Object.entries(usageKeys)) {
+      execSync(`plutil -replace ${key} -string ${JSON.stringify(val)} "${APP_PLIST}"`)
+    }
+    console.log('[patch-electron] Confidentialité (calendrier/micro) ✓')
+  } catch (e) {
+    console.warn('[patch-electron] Erreur clés Confidentialité:', e.message)
+  }
+}
+
 // Si déjà renommé en Muesli.app, on a fini
 if (APP === MUESLI_APP) {
   console.log('[patch-electron] Déjà patché ✓')

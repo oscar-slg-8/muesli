@@ -2,17 +2,7 @@
 // Processus principal Electron — Muesli (bootstrap)
 // ============================================================
 
-import {
-  app,
-  BrowserWindow,
-  dialog,
-  session,
-  nativeImage,
-  Menu,
-  Notification,
-  shell,
-  protocol
-} from 'electron'
+import { app, BrowserWindow, dialog, session, nativeImage, Menu, protocol } from 'electron'
 import { join } from 'path'
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { DatabaseService } from '../src/services/database'
@@ -23,6 +13,9 @@ import { PyannoteService } from '../src/services/pyannote'
 import { SummarizationService } from '../src/services/summarization'
 import { createTray, destroyTray } from './tray'
 import { getUpcomingMeetings, getUpcomingEvents, extractMeetingUrl } from './calendar'
+import { showMeetingNotification, closeNotification } from './notification/MeetingNotification'
+import { openMeetingUrl } from './utils/openInChrome'
+import { ensurePathEnv } from './utils/platform'
 import { SettingsManager } from './settings/SettingsManager'
 import { PipelineManager } from './recording/PipelineManager'
 import { RecordingOrchestrator } from './recording/RecordingOrchestrator'
@@ -34,6 +27,9 @@ import * as settingsHandlers from './ipc/settingsHandlers'
 // App configuration (must run before whenReady)
 // ============================================================
 app.setName('Muesli')
+
+// Rendre sox/ffmpeg (Homebrew) trouvables même en build packagé (GUI launch).
+ensurePathEnv()
 
 // Empêcher Chromium de throttler le renderer en arrière-plan (utile pour les timers UI).
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
@@ -143,9 +139,18 @@ function showWindow(): void {
 app.whenReady().then(() => {
   // Icône dock — uniquement en dev
   if (app.dock) {
-    const dockSrc = [iconPath, dockIconPath].find(p => existsSync(p))
+    // IMPORTANT : nativeImage.createFromPath ne sait PAS décoder les .icns.
+    // On privilégie donc le PNG (icon-dock.png) qui, lui, se charge correctement
+    // et permet à app.dock.setIcon de réellement afficher la nouvelle icône.
+    // En packagé, build/ n'est pas dans app.asar → on cherche aussi dans resources.
+    const dockSrc = [
+      dockIconPath,
+      join(process.resourcesPath, 'icon-dock.png'),
+      iconPath
+    ].find(p => existsSync(p))
     if (dockSrc) {
-      app.dock.setIcon(nativeImage.createFromPath(dockSrc))
+      const img = nativeImage.createFromPath(dockSrc)
+      if (!img.isEmpty()) app.dock.setIcon(img)
     }
   }
 
@@ -195,7 +200,24 @@ app.whenReady().then(() => {
     onStartRecording: (title?: string) => orchestrator.startRecording(title),
     onStopRecording: () => orchestrator.stopRecording(),
     onOpenWindow: () => showWindow(),
-    onQuit: () => app.quit()
+    onQuit: () => app.quit(),
+    onTestNotification: () => {
+      const now = new Date()
+      showMeetingNotification(
+        {
+          title: '[Visio] - Oscar x Vizzia - Hebdo (test)',
+          startDate: now.toISOString(),
+          endDate: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
+          hasUrl: true
+        },
+        {
+          onJoin: () => {
+            void openMeetingUrl('https://meet.google.com/test-abc-def')
+            startRecordingWhenReady('[Visio] - Oscar x Vizzia - Hebdo (test)')
+          }
+        }
+      )
+    }
   }
 
   // --- Recording ---
@@ -361,6 +383,9 @@ app.whenReady().then(() => {
   // ============================================================
   const notifiedMeetings = new Set<string>()
 
+  // UNE seule notification, déclenchée à l'heure de début de la réunion.
+  // Au clic : ouvre le lien GMeet dans un nouvel onglet de la fenêtre Chrome
+  // existante, puis lance automatiquement l'enregistrement.
   async function checkUpcomingMeetings(): Promise<void> {
     if (orchestrator.isRecording) return
 
@@ -370,43 +395,34 @@ app.whenReady().then(() => {
 
       for (const event of events) {
         const start = new Date(event.startDate).getTime()
-        const diff = start - now
+        const diff = start - now // négatif = déjà commencé
         const key = `${event.title}@${event.startDate}`
 
-        if (diff > 0 && diff <= 90000 && diff > 30000 && !notifiedMeetings.has(key)) {
+        // Déclenche quand la réunion vient de commencer (entre -5 min et maintenant),
+        // une seule fois par réunion.
+        if (diff <= 0 && diff > -5 * 60 * 1000 && !notifiedMeetings.has(key)) {
           notifiedMeetings.add(key)
           const meetingUrl = extractMeetingUrl(event)
 
-          const actions: Electron.NotificationAction[] = []
-          if (meetingUrl) {
-            actions.push({ type: 'button', text: 'Rejoindre' })
-          }
-          actions.push({ type: 'button', text: 'Enregistrer' })
-
-          const notif = new Notification({
-            title: 'Meeting dans 1 minute',
-            body: event.title,
-            silent: false,
-            actions
-          })
-
-          notif.on('action', (_, actionIndex) => {
-            if (meetingUrl && actionIndex === 0) {
-              shell.openExternal(meetingUrl).catch(err => {
-                console.error('[calendar] Erreur ouverture lien de réunion :', err)
-              })
-            } else {
-              startRecordingWhenReady(event.title)
+          showMeetingNotification(
+            {
+              title: event.title,
+              startDate: event.startDate,
+              endDate: event.endDate,
+              hasUrl: Boolean(meetingUrl)
+            },
+            {
+              onJoin: () => {
+                if (meetingUrl) {
+                  void openMeetingUrl(meetingUrl)
+                }
+                startRecordingWhenReady(event.title)
+              }
             }
-          })
+          )
 
-          notif.on('click', () => {
-            startRecordingWhenReady(event.title)
-          })
-
-          notif.show()
           console.log(
-            `[calendar] Notification : "${event.title}" dans 1 min` +
+            `[calendar] Notification réunion : "${event.title}"` +
               (meetingUrl ? ` | lien : ${meetingUrl}` : ' | pas de lien trouvé')
           )
         }
@@ -451,11 +467,6 @@ app.whenReady().then(() => {
             eventEnd: event.endDate
           })
 
-          new Notification({
-            title: 'Muesli',
-            body: `"${event.title}" commence dans 5 minutes`
-          }).show()
-
           mainWindow?.webContents.send('meeting:updated')
           console.log(`[calendar] Brouillon créé pour "${event.title}" (${event.startDate})`)
         }
@@ -467,6 +478,7 @@ app.whenReady().then(() => {
 
   // Démarre l'enregistrement en s'assurant que le renderer est prêt.
   function startRecordingWhenReady(title?: string): void {
+    closeNotification()
     if (!mainWindow) {
       createWindow()
       mainWindow!.webContents.once('did-finish-load', () => {
@@ -503,6 +515,7 @@ app.whenReady().then(() => {
           clearInterval(meetingNotifyTimer)
           clearInterval(draftMeetingTimer)
           clearInterval(staleDraftTimer)
+          closeNotification()
           destroyTray()
           database.close()
           app.exit(0)

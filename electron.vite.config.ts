@@ -26,7 +26,8 @@ export default defineConfig({
       outDir: 'out/preload',
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'electron/preload.ts')
+          index: resolve(__dirname, 'electron/preload.ts'),
+          notif: resolve(__dirname, 'electron/notification/notifPreload.ts')
         }
       }
     }

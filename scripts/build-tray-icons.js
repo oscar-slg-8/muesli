@@ -4,11 +4,12 @@
 //   build/trayTemplate@2x.png — 36×36 px (2x Retina)
 //
 // Template image macOS = NOIR sur TRANSPARENT uniquement.
-// macOS colore automatiquement selon le thème.
+// macOS colore automatiquement selon le thème (noir sur barre claire,
+// blanc sur barre sombre).
 //
-// Approche : on réutilise la même forme que icon.svg (le chunk de
-// muesli) mais remplie en noir, dans un viewBox qui la cadre avec
-// ~10% de marge pour la lisibilité en 18px.
+// Forme : même identité que icon.svg — octogone (contour) + bol & flocons,
+// mais tracée dans un viewBox serré 36×36 avec des épaisseurs adaptées
+// à la lisibilité en 18px.
 // ============================================================
 
 const sharp = require('sharp')
@@ -17,21 +18,28 @@ const path = require('path')
 const root = path.join(__dirname, '..')
 const outDir = path.join(root, 'build')
 
-// Silhouette du chunk de muesli — même path que icon.svg
-// Le path original vit dans un espace ~168..350 × 170..336 (182×166 px).
-// On utilise un viewBox serré avec un peu de marge pour le cadrer.
-const traySvg = `<svg width="36" height="36" viewBox="150 150 210 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="
-    M196 196
-    C204 178, 232 168, 264 170
-    C296 172, 324 180, 336 198
-    C348 216, 350 240, 344 264
-    C338 288, 326 308, 304 320
-    C282 332, 248 336, 220 328
-    C192 316, 172 292, 168 264
-    C164 236, 180 214, 196 196
-    Z
-  " fill="#000000"/>
+// Octogone régulier centré (18,18) rayon 15 — sommet plat haut/bas.
+function octagonPath(cx, cy, R) {
+  const pts = []
+  for (let k = 0; k < 8; k++) {
+    const a = ((22.5 + 45 * k) * Math.PI) / 180
+    pts.push([cx + R * Math.cos(a), cy + R * Math.sin(a)])
+  }
+  return (
+    pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ') +
+    ' Z'
+  )
+}
+
+const oct = octagonPath(18, 18, 15)
+
+const traySvg = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="${oct}" fill="none" stroke="#000000" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M12.6 19.4 A5.4 5.4 0 0 0 23.4 19.4 Z" fill="#000000"/>
+  <ellipse cx="18" cy="19.4" rx="5.4" ry="1.15" fill="#000000"/>
+  <circle cx="15.8" cy="16.6" r="1.05" fill="#000000"/>
+  <circle cx="18.6" cy="15.9" r="1.35" fill="#000000"/>
+  <circle cx="20.8" cy="17.0" r="0.9" fill="#000000"/>
 </svg>`
 
 async function main() {
