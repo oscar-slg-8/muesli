@@ -1,22 +1,16 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Icône Muesli — octogone contour + bol & flocons, 2D flat noir sur blanc.
-       IMPORTANT macOS 11+ : l'app fournit elle-même la forme arrondie AVEC
-       ses marges transparentes. Le système ne masque plus. On dessine donc :
-         - un fond blanc en squircle (rounded rect rx=185)
-         - dans la "safe area" Apple : 824×824 centré dans 1024 (marge ~100px).
-       Ne PAS remplir tout le carré, sinon l'icône paraît plus grosse que les
-       autres apps dans le dock. -->
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="#FFFFFF"/>
-
-  <!-- Octogone régulier (contour) -->
-  <path d="M789.16,626.81 L626.81,789.16 L397.19,789.16 L234.84,626.81 L234.84,397.19 L397.19,234.84 L626.81,234.84 L789.16,397.19 Z"
-        fill="none" stroke="#0A0A0A" stroke-width="46" stroke-linejoin="round"/>
+  <!-- Icône Muesli — bol & flocons blancs sur fond jaune (jaune emoji), 2D flat.
+       macOS 11+ : l'app fournit la forme arrondie AVEC ses marges transparentes.
+       On dessine donc un fond jaune en squircle dans la "safe area" Apple
+       (824×824 centré dans 1024) — ne PAS remplir tout le carré. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#FFCC4D"/>
 
   <!-- Bol -->
-  <path d="M408 524 A104 104 0 0 0 616 524 Z" fill="#0A0A0A"/>
-  <ellipse cx="512" cy="524" rx="104" ry="22" fill="#0A0A0A"/>
+  <path d="M232 498 A280 280 0 0 0 792 498 Z" fill="#FFFFFF"/>
+  <ellipse cx="512" cy="498" rx="280" ry="60" fill="#FFFFFF"/>
+
   <!-- Flocons -->
-  <circle cx="470" cy="470" r="20" fill="#0A0A0A"/>
-  <circle cx="524" cy="456" r="26" fill="#0A0A0A"/>
-  <circle cx="566" cy="478" r="17" fill="#0A0A0A"/>
+  <circle cx="399" cy="353" r="54" fill="#FFFFFF"/>
+  <circle cx="544" cy="315" r="70" fill="#FFFFFF"/>
+  <circle cx="657" cy="374" r="46" fill="#FFFFFF"/>
 </svg>

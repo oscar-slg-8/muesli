@@ -7,9 +7,8 @@
 // macOS colore automatiquement selon le thème (noir sur barre claire,
 // blanc sur barre sombre).
 //
-// Forme : même identité que icon.svg — octogone (contour) + bol & flocons,
-// mais tracée dans un viewBox serré 36×36 avec des épaisseurs adaptées
-// à la lisibilité en 18px.
+// Forme : même identité que icon.svg — bol & flocons (silhouette pleine),
+// tracée dans un viewBox serré 36×36 pour rester lisible en 18px.
 // ============================================================
 
 const sharp = require('sharp')
@@ -18,28 +17,12 @@ const path = require('path')
 const root = path.join(__dirname, '..')
 const outDir = path.join(root, 'build')
 
-// Octogone régulier centré (18,18) rayon 15 — sommet plat haut/bas.
-function octagonPath(cx, cy, R) {
-  const pts = []
-  for (let k = 0; k < 8; k++) {
-    const a = ((22.5 + 45 * k) * Math.PI) / 180
-    pts.push([cx + R * Math.cos(a), cy + R * Math.sin(a)])
-  }
-  return (
-    pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ') +
-    ' Z'
-  )
-}
-
-const oct = octagonPath(18, 18, 15)
-
 const traySvg = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="${oct}" fill="none" stroke="#000000" stroke-width="2.4" stroke-linejoin="round"/>
-  <path d="M12.6 19.4 A5.4 5.4 0 0 0 23.4 19.4 Z" fill="#000000"/>
-  <ellipse cx="18" cy="19.4" rx="5.4" ry="1.15" fill="#000000"/>
-  <circle cx="15.8" cy="16.6" r="1.05" fill="#000000"/>
-  <circle cx="18.6" cy="15.9" r="1.35" fill="#000000"/>
-  <circle cx="20.8" cy="17.0" r="0.9" fill="#000000"/>
+  <ellipse cx="18" cy="17.3" rx="14" ry="3" fill="#000000"/>
+  <path d="M4 17.3 A14 14 0 0 0 32 17.3 Z" fill="#000000"/>
+  <circle cx="12.35" cy="10.05" r="2.7" fill="#000000"/>
+  <circle cx="19.6" cy="8.15" r="3.5" fill="#000000"/>
+  <circle cx="25.25" cy="11.1" r="2.3" fill="#000000"/>
 </svg>`
 
 async function main() {
