@@ -91,7 +91,11 @@ const api = {
     copyToClipboard: (text: string): Promise<void> =>
       ipcRenderer.invoke('export:copyToClipboard', text),
     notionExport: (meetingId: string): Promise<{ ok: boolean; url?: string; error?: string }> =>
-      ipcRenderer.invoke('export:notion', meetingId)
+      ipcRenderer.invoke('export:notion', meetingId),
+    notionExportBulk: (
+      meetingIds: string[]
+    ): Promise<{ results: Array<{ id: string; ok: boolean; url?: string; error?: string }> }> =>
+      ipcRenderer.invoke('export:notionBulk', meetingIds)
   },
 
   // --- Système ---

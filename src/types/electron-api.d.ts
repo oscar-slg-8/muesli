@@ -70,6 +70,9 @@ export interface ElectronAPI {
     notionExport: (
       meetingId: string
     ) => Promise<{ ok: true; url: string } | { ok: false; error: string }>
+    notionExportBulk: (
+      meetingIds: string[]
+    ) => Promise<{ results: Array<{ id: string; ok: boolean; url?: string; error?: string }> }>
   }
 
   // --- Système ---

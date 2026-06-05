@@ -5,6 +5,9 @@ interface Props {
   meeting: Meeting
   selected: boolean
   onClick: () => void
+  selectionMode?: boolean
+  checked?: boolean
+  onToggle?: () => void
 }
 
 function formatDate(iso: string): string {
@@ -27,28 +30,60 @@ const statusDot: Record<string, { color: string; pulse: boolean }> = {
   error: { color: '#FF9500', pulse: false }
 }
 
-export function MeetingListItem({ meeting, selected, onClick }: Props) {
+export function MeetingListItem({
+  meeting,
+  selected,
+  onClick,
+  selectionMode = false,
+  checked = false,
+  onToggle
+}: Props) {
   const title = meeting.title || 'Réunion sans titre'
   const dot = statusDot[meeting.status] || { color: 'transparent', pulse: false }
   const isDraft = meeting.status === 'draft'
   const hasCalendar = !!meeting.calendarEventId
   const attendeeCount = meeting.attendees?.length ?? 0
+  const highlight = selectionMode ? checked : selected
 
   return (
     <button
-      onClick={onClick}
+      onClick={selectionMode ? onToggle : onClick}
       className="w-full text-left px-3 py-3 rounded-xl transition-all mb-0.5"
       style={{
-        background: selected ? '#F0EFE9' : 'transparent'
+        background: highlight ? '#F0EFE9' : 'transparent'
       }}
       onMouseEnter={e => {
-        if (!selected) (e.currentTarget as HTMLButtonElement).style.background = '#F7F6F3'
+        if (!highlight) (e.currentTarget as HTMLButtonElement).style.background = '#F7F6F3'
       }}
       onMouseLeave={e => {
-        if (!selected) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+        if (!highlight) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'
       }}
     >
       <div className="flex items-start gap-2">
+        {selectionMode && (
+          <span
+            className="flex-shrink-0 mt-0.5 w-4 h-4 rounded flex items-center justify-center"
+            style={{
+              border: `1.5px solid ${checked ? '#2563EB' : '#C7C7CC'}`,
+              background: checked ? '#2563EB' : 'transparent'
+            }}
+          >
+            {checked && (
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#fff"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+          </span>
+        )}
         {dot.color !== 'transparent' && (
           <span
             className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${dot.pulse ? 'animate-record' : ''}`}

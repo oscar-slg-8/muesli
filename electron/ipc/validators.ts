@@ -52,6 +52,7 @@ export const IpcSchemas = {
   'export:saveFile': z.tuple([shortStr, z.string().max(10_000_000)]),
   'export:copyToClipboard': z.string().max(1_000_000),
   'export:notion': uuid,
+  'export:notionBulk': z.array(uuid).min(1).max(100),
 
   // system
   'system:openExternal': z
