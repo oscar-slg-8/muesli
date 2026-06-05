@@ -330,6 +330,48 @@ export function register(deps: MeetingDeps): void {
     }
   })
 
+  // Export multiple : une page Notion par réunion, résultats agrégés par id.
+  safeHandle('export:notionBulk', IpcSchemas['export:notionBulk'], async meetingIds => {
+    const settings = settingsManager.getSettings()
+    if (!settings.apiKeyNotion)
+      return {
+        results: meetingIds.map(id => ({ id, ok: false, error: 'Token Notion non configuré' }))
+      }
+    if (!settings.notionDatabaseId)
+      return {
+        results: meetingIds.map(id => ({
+          id,
+          ok: false,
+          error: 'Database ID Notion non configuré'
+        }))
+      }
+
+    const results: Array<{ id: string; ok: boolean; url?: string; error?: string }> = []
+    // Séquentiel : évite de saturer l'API Notion (rate limit ~3 req/s).
+    for (const id of meetingIds) {
+      try {
+        const meeting = database.getMeeting(id)
+        if (!meeting) {
+          results.push({ id, ok: false, error: 'Réunion introuvable' })
+          continue
+        }
+        const segments = database.getSegments(id)
+        const url = await exportToNotion(
+          meeting,
+          segments,
+          settings.apiKeyNotion,
+          settings.notionDatabaseId
+        )
+        results.push({ id, ok: true, url })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('[ipc] export:notionBulk', id, msg)
+        results.push({ id, ok: false, error: msg })
+      }
+    }
+    return { results }
+  })
+
   // ---- calendar ----
   ipcMain.handle('calendar:getEvents', async () => {
     try {

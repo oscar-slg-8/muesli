@@ -1,7 +1,12 @@
 // Sidebar — Liste des réunions, recherche, enregistrement
+import { useState } from 'react'
 import type { Meeting } from '../../types'
 import { MeetingListItem } from './MeetingListItem'
 import { formatDurationTimer } from '../../utils/format'
+
+type BulkNotionResult = {
+  results: Array<{ id: string; ok: boolean; url?: string; error?: string }>
+}
 
 interface AudioLevels {
   me: number
@@ -20,6 +25,7 @@ interface Props {
   isRecording: boolean
   recordingDuration: number
   audioLevels?: AudioLevels
+  onExportNotion: (ids: string[]) => Promise<BulkNotionResult>
 }
 
 function AudioLevelBar({ level, label, color }: { level: number; label: string; color: string }) {
@@ -56,12 +62,64 @@ export function MeetingList({
   onStopRecording,
   isRecording,
   recordingDuration,
-  audioLevels
+  audioLevels,
+  onExportNotion
 }: Props) {
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [exporting, setExporting] = useState(false)
+  const [statusMsg, setStatusMsg] = useState<{ text: string; error: boolean } | null>(null)
+
+  const exitSelection = () => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }
+
+  const toggleId = (id: string) => {
+    setStatusMsg(null)
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const allVisibleSelected = meetings.length > 0 && meetings.every(m => selectedIds.has(m.id))
+  const toggleAll = () => {
+    setStatusMsg(null)
+    setSelectedIds(allVisibleSelected ? new Set() : new Set(meetings.map(m => m.id)))
+  }
+
+  const handleExport = async () => {
+    if (selectedIds.size === 0 || exporting) return
+    setExporting(true)
+    setStatusMsg(null)
+    try {
+      const { results } = await onExportNotion(Array.from(selectedIds))
+      const okCount = results.filter(r => r.ok).length
+      const failCount = results.length - okCount
+      if (failCount === 0) {
+        setStatusMsg({ text: `${okCount} réunion(s) exportée(s) vers Notion ✓`, error: false })
+        exitSelection()
+      } else {
+        const firstErr = results.find(r => !r.ok)?.error ?? 'Erreur'
+        setStatusMsg({
+          text: `${okCount} export(s) OK, ${failCount} échec(s) : ${firstErr}`,
+          error: true
+        })
+      }
+    } catch (err) {
+      setStatusMsg({ text: err instanceof Error ? err.message : String(err), error: true })
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
       <div
-        className="titlebar-drag"
+        className="titlebar-drag flex items-center justify-between"
         style={{ paddingTop: 52, paddingLeft: 16, paddingRight: 16, paddingBottom: 12 }}
       >
         <span
@@ -70,6 +128,24 @@ export function MeetingList({
         >
           Réunions
         </span>
+        {meetings.length > 0 && (
+          <button
+            onClick={() => {
+              setStatusMsg(null)
+              if (selectionMode) exitSelection()
+              else setSelectionMode(true)
+            }}
+            className="text-xs font-medium transition-colors"
+            style={
+              {
+                color: selectionMode ? '#C0392B' : '#2563EB',
+                WebkitAppRegion: 'no-drag'
+              } as React.CSSProperties
+            }
+          >
+            {selectionMode ? 'Annuler' : 'Sélectionner'}
+          </button>
+        )}
       </div>
 
       <div className="px-3 pb-2">
@@ -111,10 +187,57 @@ export function MeetingList({
               meeting={m}
               selected={m.id === selectedId}
               onClick={() => onSelect(m.id)}
+              selectionMode={selectionMode}
+              checked={selectedIds.has(m.id)}
+              onToggle={() => toggleId(m.id)}
             />
           ))
         )}
       </div>
+
+      {statusMsg && (
+        <div
+          className="mx-3 mb-1 px-3 py-2 rounded-lg text-xs"
+          style={
+            statusMsg.error
+              ? { background: '#FFF5F5', color: '#C0392B' }
+              : { background: '#F0FDF4', color: '#15803D' }
+          }
+        >
+          {statusMsg.text}
+        </div>
+      )}
+
+      {selectionMode && (
+        <div className="p-3 space-y-2" style={{ borderTop: '1px solid #F0EFE9' }}>
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs" style={{ color: '#8E8E93' }}>
+              {selectedIds.size} sélectionnée{selectedIds.size > 1 ? 's' : ''}
+            </span>
+            <button
+              onClick={toggleAll}
+              className="text-xs font-medium"
+              style={{ color: '#2563EB' }}
+            >
+              {allVisibleSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
+            </button>
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={selectedIds.size === 0 || exporting}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors"
+            style={{
+              background: selectedIds.size === 0 || exporting ? '#E5E7EB' : '#2563EB',
+              color: selectedIds.size === 0 || exporting ? '#9CA3AF' : '#FFFFFF',
+              cursor: selectedIds.size === 0 || exporting ? 'default' : 'pointer'
+            }}
+          >
+            {exporting
+              ? 'Export en cours…'
+              : `Exporter vers Notion${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
+          </button>
+        </div>
+      )}
 
       <div className="p-3 space-y-1" style={{ borderTop: '1px solid #F0EFE9' }}>
         {isRecording ? (

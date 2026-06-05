@@ -79,6 +79,7 @@ function App(): JSX.Element {
           isRecording={recording.isRecording}
           recordingDuration={recording.duration}
           audioLevels={recording.audioLevels}
+          onExportNotion={ids => window.api.export.notionExportBulk(ids)}
         />
       </aside>
 
