@@ -72,7 +72,9 @@ func printEvents(store: EKEventStore) {
             dict["location"] = location
         }
         if let notes = event.notes, !notes.isEmpty {
-            dict["notes"] = String(notes.prefix(200))
+            // 2000 caractères : assez pour capter les sections "Join by phone" /
+            // numéros de dial-in souvent placées en bas des longues invitations.
+            dict["notes"] = String(notes.prefix(2000))
         }
         if let url = event.url {
             dict["url"] = url.absoluteString
