@@ -26,10 +26,9 @@ function main() {
   fs.mkdirSync(macosDir, { recursive: true })
 
   // 1. Compilation Swift → binaire dans le bundle
-  execSync(
-    `xcrun swiftc -framework EventKit -framework Foundation "${swift}" -o "${binOut}"`,
-    { stdio: 'inherit' }
-  )
+  execSync(`xcrun swiftc -framework EventKit -framework Foundation "${swift}" -o "${binOut}"`, {
+    stdio: 'inherit'
+  })
 
   // 2. Info.plist du bundle
   fs.copyFileSync(plist, path.join(appDir, 'Contents', 'Info.plist'))

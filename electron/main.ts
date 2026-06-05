@@ -143,11 +143,9 @@ app.whenReady().then(() => {
     // On privilégie donc le PNG (icon-dock.png) qui, lui, se charge correctement
     // et permet à app.dock.setIcon de réellement afficher la nouvelle icône.
     // En packagé, build/ n'est pas dans app.asar → on cherche aussi dans resources.
-    const dockSrc = [
-      dockIconPath,
-      join(process.resourcesPath, 'icon-dock.png'),
-      iconPath
-    ].find(p => existsSync(p))
+    const dockSrc = [dockIconPath, join(process.resourcesPath, 'icon-dock.png'), iconPath].find(p =>
+      existsSync(p)
+    )
     if (dockSrc) {
       const img = nativeImage.createFromPath(dockSrc)
       if (!img.isEmpty()) app.dock.setIcon(img)

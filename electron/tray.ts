@@ -61,7 +61,10 @@ export function createTray(callbacks: TrayCallbacks, shortcut: string): Tray {
         `size=${JSON.stringify(trayIcon.getSize())})`
     )
   } else {
-    console.error('[tray] Aucune icône tray trouvée — le Tray sera invisible. Cherché :', trayCandidates)
+    console.error(
+      '[tray] Aucune icône tray trouvée — le Tray sera invisible. Cherché :',
+      trayCandidates
+    )
     trayIcon = nativeImage.createEmpty()
   }
   trayIcon.setTemplateImage(true)
