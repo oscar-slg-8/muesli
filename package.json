@@ -39,13 +39,6 @@
     ],
     "extraResources": [
       {
-        "from": "node_modules/better-sqlite3/build/Release",
-        "to": "app.asar.unpacked/node_modules/better-sqlite3/build/Release",
-        "filter": [
-          "*.node"
-        ]
-      },
-      {
         "from": "resources/CalendarHelper.app",
         "to": "CalendarHelper.app"
       },
