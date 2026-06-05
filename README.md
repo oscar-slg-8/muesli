@@ -14,11 +14,36 @@ Muesli runs entirely as a local desktop app. Both the transcription and the summ
 
 ---
 
+## Demo
+
+<!--
+  Add a short demo GIF here. It is the single biggest driver of stars.
+  Record a 15-20s clip (start recording, live transcript, generated summary),
+  save it as docs/demo.gif, then uncomment the line below.
+-->
+<!-- <p align="center"><img src="docs/demo.gif" alt="Muesli in action" width="760"></p> -->
+
+> **Download:** packaged `.dmg` builds are published on the [Releases page](https://github.com/oscar-slg-8/muesli/releases). No release yet? Build from source in a couple of minutes (see [Getting started](#getting-started)).
+
+---
+
 ## Why it exists
 
 Most meeting-notes tools join the call as a visible bot or upload everything to a SaaS backend. Muesli takes the opposite approach: it captures the microphone and system audio **locally** on macOS, so it works on any call (Meet, Zoom, Teams, a phone on speaker) and nothing is stored on a third-party server you don't control.
 
 It is also far cheaper. There is no subscription: instead of a flat monthly plan like Granola (~$18/user/month), you pay only for what you actually use through your own API keys, which typically works out to a few cents per meeting. For occasional use, that is a fraction of the cost of a fixed plan.
+
+### How Muesli compares
+
+|                         |       Muesli        |   Granola    |   Otter.ai   |
+| ----------------------- | :-----------------: | :----------: | :----------: |
+| Runs fully on your Mac  |         ✅          |      ❌      |      ❌      |
+| No account / no sign-up |         ✅          |      ❌      |      ❌      |
+| Open source             |         ✅          |      ❌      |      ❌      |
+| You own the data & keys |         ✅          |      ❌      |      ❌      |
+| Pricing                 | pay-per-use (cents) | subscription | subscription |
+
+You bring your own API keys, so the audio only ever goes to the providers you explicitly choose. There is no Muesli server in the middle.
 
 ## Features
 
