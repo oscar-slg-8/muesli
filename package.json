@@ -1,6 +1,6 @@
 {
   "name": "muesli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Prise de notes de réunions — macOS",
   "productName": "Muesli",
   "main": "./out/main/index.js",
