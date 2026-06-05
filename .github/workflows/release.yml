@@ -1,0 +1,60 @@
+name: Release
+
+# Build et publication automatique du .dmg quand on pousse un tag vX.Y.Z.
+# Exemple : git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # nécessaire pour créer la Release et y attacher le .dmg
+
+jobs:
+  build-dmg:
+    name: Build & publish macOS .dmg
+    runs-on: macos-latest # arm64 (Apple Silicon), comme la cible du build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules for Electron ABI
+        run: npm run rebuild
+
+      - name: Build app icons
+        run: npm run build:icon
+
+      - name: Build system-audio helper (Swift)
+        run: npm run build:system-audio
+
+      - name: Build main / preload / renderer
+        run: npm run build
+
+      - name: Package .dmg
+        run: npx electron-builder --mac dmg --publish never
+        env:
+          # Pas de certificat Developer ID en CI : on désactive la recherche
+          # de signature pour que electron-builder produise un .dmg non signé.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          generate_release_notes: true
+          body: |
+            ## Muesli ${{ github.ref_name }}
+
+            Téléchargez le `.dmg` ci-dessous.
+
+            > ⚠️ **Build non signé (open source).** macOS affichera un avertissement
+            > au premier lancement. Pour ouvrir l'app : clic droit sur Muesli →
+            > **Ouvrir** → **Ouvrir**. Si besoin :
+            > `xattr -cr /Applications/Muesli.app`
