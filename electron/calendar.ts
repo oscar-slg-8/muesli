@@ -103,7 +103,24 @@ const MEETING_URL_PATTERNS: RegExp[] = [
   // Microsoft Teams Live
   /https?:\/\/teams\.live\.com\/meet\/[^\s"<>[\]]+/gi,
   // Webex
-  /https?:\/\/[a-z0-9-]*\.webex\.com\/[a-z0-9-]+\/j\.php[^\s"<>[\]]*/gi
+  /https?:\/\/[a-z0-9-]*\.webex\.com\/[a-z0-9-]+\/j\.php[^\s"<>[\]]*/gi,
+  // Whereby
+  /https?:\/\/[a-z0-9-]*\.?whereby\.com\/[^\s"<>[\]]+/gi,
+  // Jitsi Meet
+  /https?:\/\/meet\.jit\.si\/[^\s"<>[\]]+/gi,
+  // Skype
+  /https?:\/\/join\.skype\.com\/[^\s"<>[\]]+/gi,
+  // GoTo Meeting
+  /https?:\/\/(?:[a-z0-9-]*\.)?goto(?:meeting)?\.com\/[^\s"<>[\]]+/gi,
+  /https?:\/\/[a-z0-9-]*\.gotomeet\.me\/[^\s"<>[\]]+/gi,
+  // BlueJeans
+  /https?:\/\/[a-z0-9-]*\.?bluejeans\.com\/[^\s"<>[\]]+/gi,
+  // 8x8
+  /https?:\/\/[a-z0-9-]*\.?8x8\.vc\/[^\s"<>[\]]+/gi,
+  // Around
+  /https?:\/\/meet\.around\.co\/[^\s"<>[\]]+/gi,
+  // Google Meet via lien court (g.co/meet)
+  /https?:\/\/g\.co\/meet\/[^\s"<>[\]]+/gi
 ]
 
 /**
@@ -126,6 +143,54 @@ export function extractMeetingUrl(event: CalendarEvent): string | null {
   }
 
   return null
+}
+
+// ============================================================
+// Détection d'un appel téléphonique / numéro composable
+// ============================================================
+
+// Mots-clés (FR/EN) signalant un point d'accès téléphonique dans l'invitation.
+const PHONE_KEYWORDS = [
+  'join by phone',
+  'dial-in',
+  'dial in',
+  'phone number',
+  'by phone',
+  'call-in',
+  'call in',
+  'conference call',
+  'one tap',
+  'téléphone',
+  'telephone',
+  'appel téléphonique',
+  'numéro de téléphone',
+  'composez',
+  'rejoindre par téléphone'
+]
+
+// Numéro composable : format international (+33 1 23 ...) ou français (01 23 45 67 89).
+// Volontairement assez strict (>= 9 chiffres) pour limiter les faux positifs.
+const PHONE_NUMBER_REGEX = /(?:\+\d[\d\s().-]{8,}\d)|(?:\b0\d(?:[\s.-]?\d{2}){4}\b)/
+
+/**
+ * Vrai si l'invitation mentionne un appel téléphonique ou contient un numéro
+ * composable (mots-clés OU motif de numéro), dans url / location / notes.
+ */
+export function hasPhoneDialIn(event: CalendarEvent): boolean {
+  const text = [event.url, event.location, event.notes].filter(Boolean).join('  ')
+  if (!text) return false
+  const lower = text.toLowerCase()
+  if (PHONE_KEYWORDS.some(k => lower.includes(k))) return true
+  return PHONE_NUMBER_REGEX.test(text)
+}
+
+/**
+ * Un événement mérite-t-il une notification de réunion ?
+ * Oui uniquement s'il a un lien visio (toute plateforme connue) OU un point
+ * d'accès téléphonique. Filtre les events "sport", perso, etc.
+ */
+export function isJoinableMeeting(event: CalendarEvent): boolean {
+  return Boolean(extractMeetingUrl(event)) || hasPhoneDialIn(event)
 }
 
 // Retourne uniquement les événements non all-day, futurs ou en cours

@@ -12,7 +12,12 @@ import { DiarizationService } from '../src/services/diarization'
 import { PyannoteService } from '../src/services/pyannote'
 import { SummarizationService } from '../src/services/summarization'
 import { createTray, destroyTray } from './tray'
-import { getUpcomingMeetings, getUpcomingEvents, extractMeetingUrl } from './calendar'
+import {
+  getUpcomingMeetings,
+  getUpcomingEvents,
+  extractMeetingUrl,
+  isJoinableMeeting
+} from './calendar'
 import { showMeetingNotification, closeNotification } from './notification/MeetingNotification'
 import { openMeetingUrl } from './utils/openInChrome'
 import { ensurePathEnv } from './utils/platform'
@@ -395,6 +400,11 @@ app.whenReady().then(() => {
         const start = new Date(event.startDate).getTime()
         const diff = start - now // négatif = déjà commencé
         const key = `${event.title}@${event.startDate}`
+
+        // On ne notifie QUE les vrais rendez-vous : lien visio (toute plateforme)
+        // ou point d'accès téléphonique / numéro dans l'invitation. Cela écarte
+        // les events perso (sport, rappels, etc.).
+        if (!isJoinableMeeting(event)) continue
 
         // Déclenche quand la réunion vient de commencer (entre -5 min et maintenant),
         // une seule fois par réunion.
