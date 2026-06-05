@@ -16,7 +16,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"electron/**/*.ts\" \"scripts/**/*.{js,mjs}\" \".github/**/*.yml\" \"*.{js,ts,json,html}\" README.md ARCHITECTURE.md CONTRIBUTING.md",
     "rebuild": "electron-rebuild",
     "build:icon": "node scripts/build-icon.js && node scripts/build-tray-icons.js",
-    "build:calendar": "xcrun swiftc -framework EventKit -framework Foundation electron/calendar.swift -o resources/calendar-helper",
+    "build:calendar": "node scripts/build-calendar.js",
     "build:system-audio": "node scripts/build-system-audio.js",
     "dist": "npm run build:icon && npm run build:system-audio && electron-vite build && electron-builder",
     "pack": "electron-vite build && electron-builder --dir"
@@ -46,17 +46,34 @@
         ]
       },
       {
-        "from": "resources/calendar-helper",
-        "to": "calendar-helper"
+        "from": "resources/CalendarHelper.app",
+        "to": "CalendarHelper.app"
       },
       {
         "from": "resources/system-audio-capture",
         "to": "system-audio-capture"
+      },
+      {
+        "from": "build/trayTemplate.png",
+        "to": "trayTemplate.png"
+      },
+      {
+        "from": "build/trayTemplate@2x.png",
+        "to": "trayTemplate@2x.png"
+      },
+      {
+        "from": "build/icon-dock.png",
+        "to": "icon-dock.png"
       }
     ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
+      "extendInfo": {
+        "NSCalendarsFullAccessUsageDescription": "Muesli lit vos événements pour vous proposer de rejoindre et enregistrer vos réunions.",
+        "NSCalendarsUsageDescription": "Muesli lit vos événements pour vous proposer de rejoindre et enregistrer vos réunions.",
+        "NSMicrophoneUsageDescription": "Muesli enregistre le micro pendant vos réunions."
+      },
       "target": [
         {
           "target": "dmg",

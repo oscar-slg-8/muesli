@@ -19,6 +19,7 @@ export interface TrayCallbacks {
   onStopRecording: () => void
   onOpenWindow: () => void
   onQuit: () => void
+  onTestNotification?: () => void
 }
 
 // Construit un menu de base de manière synchrone (sans attendre le calendrier).
@@ -42,18 +43,28 @@ export function createTray(callbacks: TrayCallbacks, shortcut: string): Tray {
   //   - setTemplateImage(true) est OBLIGATOIRE même si le nom contient "Template" —
   //     Electron ne le détecte pas toujours automatiquement.
   //   - Pas de resize() : les assets sont déjà à 18px (1x) et 36px (2x).
-  const trayIconPath = join(app.getAppPath(), 'build', 'trayTemplate.png')
-  const trayIcon2xPath = join(app.getAppPath(), 'build', 'trayTemplate@2x.png')
+  // Résolution robuste dev + packagé :
+  //  - dev : <projet>/build/trayTemplate.png  (app.getAppPath() = racine projet)
+  //  - packagé : process.resourcesPath/trayTemplate.png (via extraResources),
+  //    car build/ n'est PAS inclus dans app.asar.
+  const trayCandidates = [
+    join(app.getAppPath(), 'build', 'trayTemplate.png'),
+    join(process.resourcesPath, 'trayTemplate.png')
+  ]
+  const trayIconPath = trayCandidates.find(p => existsSync(p))
   let trayIcon: Electron.NativeImage
 
-  if (existsSync(trayIconPath) && existsSync(trayIcon2xPath)) {
+  if (trayIconPath) {
     trayIcon = nativeImage.createFromPath(trayIconPath)
-  } else if (existsSync(trayIcon2xPath)) {
-    trayIcon = nativeImage.createFromPath(trayIcon2xPath)
-  } else if (existsSync(trayIconPath)) {
-    trayIcon = nativeImage.createFromPath(trayIconPath)
+    console.log(
+      `[tray] Icône chargée : ${trayIconPath} (empty=${trayIcon.isEmpty()}, ` +
+        `size=${JSON.stringify(trayIcon.getSize())})`
+    )
   } else {
-    console.error('[tray] Aucune icône tray trouvée — le Tray sera invisible')
+    console.error(
+      '[tray] Aucune icône tray trouvée — le Tray sera invisible. Cherché :',
+      trayCandidates
+    )
     trayIcon = nativeImage.createEmpty()
   }
   trayIcon.setTemplateImage(true)
@@ -134,11 +145,18 @@ async function refreshTrayMenu(callbacks: TrayCallbacks): Promise<void> {
     menuItems.push({ type: 'separator' })
   }
 
-  menuItems.push(
-    { label: 'Ouvrir Muesli', click: callbacks.onOpenWindow },
-    { type: 'separator' },
-    { label: 'Quitter', click: callbacks.onQuit }
-  )
+  menuItems.push({ label: 'Ouvrir Muesli', click: callbacks.onOpenWindow })
+
+  // Test manuel de la notification (dev uniquement).
+  // NB : on ne peut PAS se fier à app.isPackaged ici — patch-electron renomme
+  // le binaire en « Muesli », ce qui force app.isPackaged à true même en dev.
+  // Le signal fiable est ELECTRON_RENDERER_URL, injecté par electron-vite en dev.
+  const isDev = Boolean(process.env.ELECTRON_RENDERER_URL)
+  if (isDev && callbacks.onTestNotification) {
+    menuItems.push({ label: '🔔 Tester la notification', click: callbacks.onTestNotification })
+  }
+
+  menuItems.push({ type: 'separator' }, { label: 'Quitter', click: callbacks.onQuit })
 
   const menu = Menu.buildFromTemplate(menuItems)
   tray.setContextMenu(menu)
