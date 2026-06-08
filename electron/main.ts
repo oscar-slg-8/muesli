@@ -6,6 +6,7 @@ import { app, BrowserWindow, dialog, session, nativeImage, Menu, protocol } from
 import { join } from 'path'
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { DatabaseService } from '../src/services/database'
+import { DEFAULT_SETTINGS } from '../src/types'
 import { AudioCaptureService } from '../src/services/audioCapture'
 import { TranscriptionService } from '../src/services/transcription'
 import { DiarizationService } from '../src/services/diarization'
@@ -177,8 +178,11 @@ app.whenReady().then(() => {
   const summarization = new SummarizationService()
 
   // --- Settings ---
+  // NB : on ne lance PAS migrateToEncrypted() ici. Il utilise safeStorage
+  // (Keychain macOS) qui, si la signature de l'app a changé, peut bloquer/
+  // prompter — ce qui retarderait l'apparition de l'icône menu-bar. On le
+  // diffère après la création du tray + de la fenêtre (voir plus bas).
   const settingsManager = new SettingsManager(database)
-  settingsManager.migrateToEncrypted()
 
   // --- Pipeline ---
   const pipelineManager = new PipelineManager({
@@ -364,8 +368,11 @@ app.whenReady().then(() => {
   settingsHandlers.register({ settingsManager })
 
   // --- Tray (created BEFORE window to guarantee menu bar presence) ---
-  const settings = settingsManager.getSettings()
-  createTray(trayCallbacks, settings.shortcut)
+  // On lit le shortcut directement en DB plutôt que via getSettings(), car
+  // getSettings() déchiffre les clés API (safeStorage/Keychain) et pourrait
+  // bloquer le démarrage. Le shortcut n'est pas une clé sensible.
+  const shortcut = database.getSetting('shortcut', DEFAULT_SETTINGS.shortcut)
+  createTray(trayCallbacks, shortcut)
 
   // --- Window ---
   createWindow()
@@ -377,6 +384,11 @@ app.whenReady().then(() => {
       if (orchestrator.isRecording) void orchestrator.stopRecording()
     })
   }
+
+  // --- Settings : migration chiffrée (différée après l'UI) ---
+  // Premier accès safeStorage/Keychain ; placé ici pour ne pas retarder le
+  // tray ni la fenêtre si macOS prompte (cf. note plus haut).
+  settingsManager.migrateToEncrypted()
 
   // --- Recovery ---
   pipelineManager.recoverOrphanedMeetings()

@@ -141,7 +141,7 @@ export function useRecording() {
         error:
           typeof msg === 'string' && msg.length > 0
             ? msg
-            : "Capture audio système indisponible — seul le micro sera transcrit. Vérifiez les permissions dans Réglages Système → Confidentialité → Microphone."
+            : 'Capture audio système indisponible — seul le micro sera transcrit. Vérifiez les permissions dans Réglages Système → Confidentialité → Microphone.'
       }))
     }
     const handleWarning = (msg: unknown) => {

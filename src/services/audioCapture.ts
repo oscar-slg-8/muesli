@@ -401,7 +401,7 @@ export class AudioCaptureService {
           // et on inhibe le redémarrage automatique (cf. handler 'close').
           this.systemAudioPermissionDenied = true
           this.callbacks.onError(
-            "Capture audio système refusée — autorisez Muesli dans Réglages Système → " +
+            'Capture audio système refusée — autorisez Muesli dans Réglages Système → ' +
               "Confidentialité et sécurité → Microphone, puis relancez l'enregistrement."
           )
         }
