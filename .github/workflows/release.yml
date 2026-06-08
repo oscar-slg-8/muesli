@@ -14,6 +14,16 @@ jobs:
   build-dmg:
     name: Build & publish macOS .dmg
     runs-on: macos-latest # arm64 (Apple Silicon), comme la cible du build
+    # Secrets requis pour la signature Developer ID + notarisation (facultatifs :
+    # sans eux, le build retombe sur un .dmg non signé). À définir dans
+    # Settings → Secrets and variables → Actions :
+    #   MAC_CERTIFICATE_P12        base64 du certificat "Developer ID Application" (.p12)
+    #   MAC_CERTIFICATE_PASSWORD   mot de passe du .p12
+    #   APPLE_ID                   Apple ID (email) du compte développeur
+    #   APPLE_APP_SPECIFIC_PASSWORD  mot de passe d'app dédié (appleid.apple.com)
+    #   APPLE_TEAM_ID              identifiant d'équipe (10 caractères)
+    env:
+      MAC_CERTIFICATE_P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,10 +50,26 @@ jobs:
       - name: Build main / preload / renderer
         run: npm run build
 
-      - name: Package .dmg
+      - name: Import signing certificate
+        if: env.MAC_CERTIFICATE_P12 != ''
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+
+      - name: Package .dmg (signé + notarisé)
+        if: env.MAC_CERTIFICATE_P12 != ''
+        run: npx electron-builder --mac dmg --publish never -c.mac.notarize.teamId="$APPLE_TEAM_ID"
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Package .dmg (non signé — fallback sans certificat)
+        if: env.MAC_CERTIFICATE_P12 == ''
         run: npx electron-builder --mac dmg --publish never
         env:
-          # Pas de certificat Developer ID en CI : on désactive la recherche
+          # Pas de certificat Developer ID : on désactive la recherche
           # de signature pour que electron-builder produise un .dmg non signé.
           CSC_IDENTITY_AUTO_DISCOVERY: false
 

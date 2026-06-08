@@ -62,6 +62,10 @@
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
         "NSCalendarsFullAccessUsageDescription": "Muesli lit vos événements pour vous proposer de rejoindre et enregistrer vos réunions.",
         "NSCalendarsUsageDescription": "Muesli lit vos événements pour vous proposer de rejoindre et enregistrer vos réunions.",
