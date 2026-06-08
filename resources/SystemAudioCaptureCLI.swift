@@ -58,7 +58,28 @@ class AudioCapture {
         }
 
         // 3. Determine source format from the (now tap-backed) input node.
-        let srcFormat = engine.inputNode.inputFormat(forBus: 0)
+        //    Right after redirecting the input node to the tap, the HAL can
+        //    momentarily report 0 ch / 0 Hz before it propagates the tap's real
+        //    stream format. Retry briefly to absorb that race. If it stays at
+        //    0 channels, macOS is not granting audio to the tap — almost always
+        //    a missing/declined Microphone permission for the host app (Muesli).
+        var srcFormat = engine.inputNode.inputFormat(forBus: 0)
+        var formatAttempts = 0
+        while srcFormat.channelCount == 0 && formatAttempts < 10 {
+            usleep(50_000) // 50 ms
+            srcFormat = engine.inputNode.inputFormat(forBus: 0)
+            formatAttempts += 1
+        }
+        guard srcFormat.channelCount > 0 else {
+            // Signal the host process so it can show an actionable message
+            // (and NOT spin in a restart loop, which wouldn't help here).
+            print("{\"type\":\"status\",\"event\":\"permission-denied\"}")
+            throw NSError(
+                domain: "com.muesli.audio",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "System audio tap returned 0 channels after \(formatAttempts) retries — Microphone permission for Muesli is likely denied"]
+            )
+        }
         let srcRate   = srcFormat.sampleRate > 0 ? srcFormat.sampleRate : 48_000.0
         fputs("[SystemAudioCapture] Source: \(srcRate) Hz, \(srcFormat.channelCount) ch\n", stderr)
 

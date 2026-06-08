@@ -181,6 +181,9 @@ export class AudioCaptureService {
   private isRotating = false
   private micBackend: MicBackend = null
   private systemAudioRestartAttempts = 0
+  // Capture audio système refusée par macOS (tap à 0 canal) : relancer n'aiderait
+  // pas, on coupe la boucle de redémarrage et on remonte une erreur actionnable.
+  private systemAudioPermissionDenied = false
   private callbacks: AudioCaptureCallbacks = { onWarn: () => {}, onError: () => {} }
 
   currentOthersRMS = 0
@@ -199,6 +202,7 @@ export class AudioCaptureService {
     this.chunkFiles = []
     this.isRunning = true
     this.systemAudioRestartAttempts = 0
+    this.systemAudioPermissionDenied = false
     this.currentOthersRMS = 0
 
     const storagePath = app.getPath('userData')
@@ -392,6 +396,14 @@ export class AudioCaptureService {
           this.currentOthersRMS = Math.min(1, frame.rms * 10)
         } else if (frame.type === 'status' && frame.event === 'started') {
           console.log('[audio] SystemAudioCapture démarré, écriture vers', outputPath)
+        } else if (frame.type === 'status' && frame.event === 'permission-denied') {
+          // macOS refuse l'accès au tap audio (0 canal) : message actionnable,
+          // et on inhibe le redémarrage automatique (cf. handler 'close').
+          this.systemAudioPermissionDenied = true
+          this.callbacks.onError(
+            "Capture audio système refusée — autorisez Muesli dans Réglages Système → " +
+              "Confidentialité et sécurité → Microphone, puis relancez l'enregistrement."
+          )
         }
       } catch {
         /* ignorer les lignes malformées */
@@ -409,6 +421,9 @@ export class AudioCaptureService {
 
     proc.on('close', (code, signal) => {
       console.log(`[SystemAudioCapture] Terminé : code=${code}, signal=${signal}`)
+      // Permission refusée : relancer ne changerait rien et spammerait l'UI.
+      // L'erreur actionnable a déjà été remontée via onError.
+      if (this.systemAudioPermissionDenied) return
       if (
         signal !== 'SIGTERM' &&
         signal !== 'SIGKILL' &&

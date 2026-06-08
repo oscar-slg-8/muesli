@@ -8,6 +8,7 @@ const ELECTRON_APP = path.join(DIST, 'Electron.app')
 const MUESLI_APP = path.join(DIST, 'Muesli.app')
 const PATH_TXT = path.join(__dirname, '..', 'node_modules', 'electron', 'path.txt')
 const MUESLI_ICNS = path.join(__dirname, '..', 'build', 'icon.icns')
+const PKG_VERSION = require('../package.json').version
 
 // Déterminer quel .app existe
 const APP = fs.existsSync(MUESLI_APP)
@@ -52,6 +53,16 @@ if (fs.existsSync(MUESLI_ICNS)) {
     console.log('[patch-electron] Confidentialité (calendrier/micro) ✓')
   } catch (e) {
     console.warn('[patch-electron] Erreur clés Confidentialité:', e.message)
+  }
+
+  // 1ter. Estampiller la version Muesli (sinon Spotlight affiche « Electron 32.x »
+  // pour l'app de dev, prêtant à confusion avec une vraie release).
+  try {
+    execSync(`plutil -replace CFBundleShortVersionString -string "${PKG_VERSION}" "${APP_PLIST}"`)
+    execSync(`plutil -replace CFBundleVersion -string "${PKG_VERSION}" "${APP_PLIST}"`)
+    console.log(`[patch-electron] Version ${PKG_VERSION} ✓`)
+  } catch (e) {
+    console.warn('[patch-electron] Erreur version:', e.message)
   }
 }
 

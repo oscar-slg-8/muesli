@@ -135,11 +135,13 @@ export function useRecording() {
         timerRef.current = null
       }
     }
-    const handleAudioTeeError = () => {
+    const handleAudioTeeError = (msg?: unknown) => {
       setState(s => ({
         ...s,
         error:
-          "Capture audio système indisponible — seul le micro sera transcrit. Vérifiez les permissions dans Réglages Système → Confidentialité → Enregistrement d'écran."
+          typeof msg === 'string' && msg.length > 0
+            ? msg
+            : "Capture audio système indisponible — seul le micro sera transcrit. Vérifiez les permissions dans Réglages Système → Confidentialité → Microphone."
       }))
     }
     const handleWarning = (msg: unknown) => {
