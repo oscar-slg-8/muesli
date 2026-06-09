@@ -25,6 +25,7 @@ setbuf(stdout, nil)
 class AudioCapture {
     private var engine = AVAudioEngine()
     private var tapID: AudioObjectID = kAudioObjectUnknown
+    private var aggregateID: AudioObjectID = kAudioObjectUnknown
     private var audioFile: AVAudioFile?
 
     func start(outputPath: String) throws {
@@ -33,18 +34,60 @@ class AudioCapture {
         let desc = CATapDescription(stereoMixdownOfProcesses: [])
         desc.muteBehavior = .unmuted
 
-        let createStatus = AudioHardwareCreateProcessTap(desc, &tapID)
-        guard createStatus == noErr else {
+        var status = AudioHardwareCreateProcessTap(desc, &tapID)
+        guard status == noErr, tapID != kAudioObjectUnknown else {
             throw NSError(
                 domain: NSOSStatusErrorDomain,
-                code: Int(createStatus),
-                userInfo: [NSLocalizedDescriptionKey: "AudioHardwareCreateProcessTap failed: \(createStatus)"]
+                code: Int(status),
+                userInfo: [NSLocalizedDescriptionKey: "AudioHardwareCreateProcessTap failed: \(status)"]
             )
         }
         fputs("[SystemAudioCapture] Process tap created: \(tapID)\n", stderr)
 
-        // 2. Point the AVAudioEngine input node at the tap's virtual device ID.
-        var deviceID = tapID
+        // 2. Read the tap's UID. On macOS 15 (Sequoia) un process tap ne peut PAS
+        //    être utilisé directement comme périphérique d'entrée d'AVAudioEngine
+        //    (cette voie échoue avec -10851 / kAudioUnitErr_InvalidPropertyValue).
+        //    La méthode supportée : envelopper le tap dans un *aggregate device
+        //    privé* et lire depuis celui-ci.
+        var tapUID: CFString = "" as CFString
+        var uidAddr = AudioObjectPropertyAddress(
+            mSelector: kAudioTapPropertyUID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var uidSize = UInt32(MemoryLayout<CFString>.size)
+        status = withUnsafeMutablePointer(to: &tapUID) {
+            AudioObjectGetPropertyData(tapID, &uidAddr, 0, nil, &uidSize, $0)
+        }
+        guard status == noErr else {
+            throw NSError(
+                domain: NSOSStatusErrorDomain, code: Int(status),
+                userInfo: [NSLocalizedDescriptionKey: "Cannot read tap UID: \(status)"]
+            )
+        }
+
+        // 3. Create a PRIVATE aggregate device that contains the tap.
+        let aggUID = "com.muesli.systemcapture.\(UUID().uuidString)"
+        let aggDescription: [String: Any] = [
+            kAudioAggregateDeviceNameKey as String: "Muesli System Capture",
+            kAudioAggregateDeviceUIDKey as String: aggUID,
+            kAudioAggregateDeviceIsPrivateKey as String: true,
+            kAudioAggregateDeviceTapAutoStartKey as String: true,
+            kAudioAggregateDeviceTapListKey as String: [
+                [kAudioSubTapUIDKey as String: tapUID]
+            ]
+        ]
+        status = AudioHardwareCreateAggregateDevice(aggDescription as CFDictionary, &aggregateID)
+        guard status == noErr, aggregateID != kAudioObjectUnknown else {
+            throw NSError(
+                domain: NSOSStatusErrorDomain, code: Int(status),
+                userInfo: [NSLocalizedDescriptionKey: "AudioHardwareCreateAggregateDevice failed: \(status)"]
+            )
+        }
+        fputs("[SystemAudioCapture] Aggregate device created: \(aggregateID)\n", stderr)
+
+        // 4. Point the AVAudioEngine input node at the aggregate device.
+        var deviceID = aggregateID
         let setStatus = AudioUnitSetProperty(
             engine.inputNode.audioUnit!,
             kAudioOutputUnitProperty_CurrentDevice,
@@ -53,35 +96,23 @@ class AudioCapture {
             &deviceID,
             UInt32(MemoryLayout.size(ofValue: deviceID))
         )
-        if setStatus != noErr {
-            fputs("[SystemAudioCapture] Warning: could not redirect input to tap (\(setStatus)) — audio may be partial\n", stderr)
-        }
-
-        // 3. Determine source format from the (now tap-backed) input node.
-        //    Right after redirecting the input node to the tap, the HAL can
-        //    momentarily report 0 ch / 0 Hz before it propagates the tap's real
-        //    stream format. Retry briefly to absorb that race. If it stays at
-        //    0 channels, macOS is not granting audio to the tap — almost always
-        //    a missing/declined Microphone permission for the host app (Muesli).
-        var srcFormat = engine.inputNode.inputFormat(forBus: 0)
-        var formatAttempts = 0
-        while srcFormat.channelCount == 0 && formatAttempts < 10 {
-            usleep(50_000) // 50 ms
-            srcFormat = engine.inputNode.inputFormat(forBus: 0)
-            formatAttempts += 1
-        }
-        guard srcFormat.channelCount > 0 else {
-            // Signal the host process so it can show an actionable message
-            // (and NOT spin in a restart loop, which wouldn't help here).
-            print("{\"type\":\"status\",\"event\":\"permission-denied\"}")
+        guard setStatus == noErr else {
             throw NSError(
-                domain: "com.muesli.audio",
-                code: 3,
-                userInfo: [NSLocalizedDescriptionKey: "System audio tap returned 0 channels after \(formatAttempts) retries — Microphone permission for Muesli is likely denied"]
+                domain: NSOSStatusErrorDomain, code: Int(setStatus),
+                userInfo: [NSLocalizedDescriptionKey: "Cannot set input device to aggregate: \(setStatus)"]
             )
         }
+
+        // 5. Determine source format from the (aggregate-backed) input node.
+        let srcFormat = engine.inputNode.inputFormat(forBus: 0)
         let srcRate   = srcFormat.sampleRate > 0 ? srcFormat.sampleRate : 48_000.0
         fputs("[SystemAudioCapture] Source: \(srcRate) Hz, \(srcFormat.channelCount) ch\n", stderr)
+        guard srcFormat.channelCount > 0 else {
+            throw NSError(
+                domain: "com.muesli.audio", code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "Aggregate input returned 0 channels"]
+            )
+        }
 
         // 4. Build converter to PCM16 mono 16 kHz (Whisper's native format).
         let dstFormat = AVAudioFormat(
@@ -160,6 +191,11 @@ class AudioCapture {
         // Setting audioFile to nil triggers AVAudioFile deallocation which
         // finalizes the RIFF/WAV header (writes correct chunk sizes).
         audioFile = nil
+        // Détruire l'aggregate device AVANT le tap.
+        if aggregateID != kAudioObjectUnknown {
+            AudioHardwareDestroyAggregateDevice(aggregateID)
+            aggregateID = kAudioObjectUnknown
+        }
         if tapID != kAudioObjectUnknown {
             AudioHardwareDestroyProcessTap(tapID)
             tapID = kAudioObjectUnknown
