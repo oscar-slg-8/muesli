@@ -13,11 +13,15 @@ interface Props {
 function formatDate(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
+  // Même jour calendaire (réunion passée OU à venir aujourd'hui) → afficher l'heure.
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  }
   const diff = now.getTime() - d.getTime()
   const days = Math.floor(diff / 86400000)
-  if (days === 0) return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
   if (days === 1) return 'Hier'
-  if (days < 7) return d.toLocaleDateString('fr-FR', { weekday: 'long' })
+  if (days > 1 && days < 7) return d.toLocaleDateString('fr-FR', { weekday: 'long' })
+  // Autres jours (passés anciens ou futurs) → date courte.
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
 }
 
