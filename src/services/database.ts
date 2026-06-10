@@ -192,14 +192,12 @@ export class DatabaseService {
   listMeetings(): Meeting[] {
     const rows = this.getDb()
       .prepare(
-        // Brouillons (réunions à venir) en tête, triés par heure de début
-        // CROISSANTE ; puis les meetings enregistrés, du plus récent au plus
-        // ancien. (created_at d'un brouillon = heure de début de la réunion.)
-        `SELECT * FROM meetings
-         ORDER BY
-           CASE WHEN status = 'draft' THEN 0 ELSE 1 END,
-           CASE WHEN status = 'draft' THEN created_at END ASC,
-           created_at DESC`
+        // Timeline descendante continue : réunion à venir la plus lointaine en
+        // haut → la plus proche → puis l'historique (du plus récent au plus
+        // ancien). En lisant de bas en haut, l'à-venir est donc croissant et
+        // enchaîne logiquement avec le passé. (created_at d'un brouillon =
+        // heure de début de la réunion.)
+        'SELECT * FROM meetings ORDER BY created_at DESC'
       )
       .all() as MeetingRow[]
     return rows.map(r => this.rowToMeeting(r))
