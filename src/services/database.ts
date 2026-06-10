@@ -191,7 +191,16 @@ export class DatabaseService {
 
   listMeetings(): Meeting[] {
     const rows = this.getDb()
-      .prepare('SELECT * FROM meetings ORDER BY created_at DESC')
+      .prepare(
+        // Brouillons (réunions à venir) en tête, triés par heure de début
+        // CROISSANTE ; puis les meetings enregistrés, du plus récent au plus
+        // ancien. (created_at d'un brouillon = heure de début de la réunion.)
+        `SELECT * FROM meetings
+         ORDER BY
+           CASE WHEN status = 'draft' THEN 0 ELSE 1 END,
+           CASE WHEN status = 'draft' THEN created_at END ASC,
+           created_at DESC`
+      )
       .all() as MeetingRow[]
     return rows.map(r => this.rowToMeeting(r))
   }
@@ -260,7 +269,9 @@ export class DatabaseService {
       .run(
         id,
         fields.title,
-        now,
+        // created_at = heure de DÉBUT de la réunion (et non l'instant de création) :
+        // permet de trier/afficher les brouillons par heure de début.
+        fields.date,
         now,
         settings.speakerMe,
         settings.speakerOthers,
@@ -271,8 +282,8 @@ export class DatabaseService {
     return id
   }
 
-  // Supprime les meetings draft dont l'événement calendrier s'est terminé
-  // il y a plus de 2 heures et qui n'ont jamais été enregistrés.
+  // Supprime les meetings draft dont l'événement calendrier est terminé
+  // (heure de fin passée) et qui n'ont jamais été enregistrés.
   deleteStaleDrafts(): number {
     const result = this.getDb()
       .prepare(
@@ -280,7 +291,7 @@ export class DatabaseService {
       DELETE FROM meetings
       WHERE status = 'draft'
         AND calendar_event_end IS NOT NULL
-        AND datetime(calendar_event_end, '+2 hours') < datetime('now')
+        AND datetime(calendar_event_end) < datetime('now')
     `
       )
       .run()
