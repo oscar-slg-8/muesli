@@ -56,8 +56,29 @@ exports.default = async function afterPack(context) {
   }
 
   execFileSync('security', ['unlock-keychain', '-p', KEYCHAIN_PASSWORD, KEYCHAIN])
-  // Pas de hardened runtime (non notarisé) : évite de casser le helper audio
-  // ad-hoc embarqué. --deep resigne frameworks + helpers Electron.
+
+  // Signer D'ABORD les helpers embarqués dans Resources/ : codesign --deep sur
+  // l'app principale ne descend PAS dans Contents/Resources. Une identité STABLE
+  // y est indispensable pour que leurs permissions TCC (ex. Calendrier pour
+  // CalendarHelper.app) persistent entre les mises à jour.
+  const resources = path.join(appPath, 'Contents', 'Resources')
+  const nestedHelpers = [
+    path.join(resources, 'CalendarHelper.app'),
+    path.join(resources, 'system-audio-capture')
+  ]
+  for (const target of nestedHelpers) {
+    if (fs.existsSync(target)) {
+      execFileSync(
+        'codesign',
+        ['--force', '--deep', '--sign', IDENTITY, '--keychain', KEYCHAIN, target],
+        { stdio: 'inherit' }
+      )
+      console.log(`[sign-selfsigned] helper signé : ${path.basename(target)}`)
+    }
+  }
+
+  // Puis l'app principale (scelle le bundle, helpers signés inclus).
+  // Pas de hardened runtime (non notarisé) : évite de casser les helpers.
   execFileSync(
     'codesign',
     ['--force', '--deep', '--sign', IDENTITY, '--keychain', KEYCHAIN, appPath],
