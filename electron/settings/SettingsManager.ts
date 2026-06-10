@@ -74,15 +74,24 @@ export class SettingsManager {
 
   /** One-time migration: encrypt plaintext API keys already in the DB */
   migrateToEncrypted(): void {
-    if (!safeStorage.isEncryptionAvailable()) return
-    for (const key of SENSITIVE_KEYS) {
+    // N'accéder au Keychain (safeStorage) QUE s'il y a vraiment des clés en clair
+    // à chiffrer. Sinon, `isEncryptionAvailable()` déclenche un prompt Keychain
+    // (« entrez le mot de passe du trousseau ») à CHAQUE démarrage, alors même
+    // qu'aucune clé API n'est configurée. La détection se fait sur la DB (pas de
+    // Keychain), donc aucun prompt tant qu'il n'y a rien à migrer.
+    const plaintextKeys = [...SENSITIVE_KEYS].filter(key => {
       const raw = this.database.getSetting(key, '')
-      if (raw && !raw.startsWith(ENCRYPTED_PREFIX)) {
-        const encrypted = this.encryptSensitive(raw)
-        if (encrypted !== raw) {
-          this.database.setSetting(key, encrypted)
-          console.log(`[settings] Clé ${key} migrée vers le stockage chiffré`)
-        }
+      return raw !== '' && !raw.startsWith(ENCRYPTED_PREFIX)
+    })
+    if (plaintextKeys.length === 0) return
+
+    if (!safeStorage.isEncryptionAvailable()) return
+    for (const key of plaintextKeys) {
+      const raw = this.database.getSetting(key, '')
+      const encrypted = this.encryptSensitive(raw)
+      if (encrypted !== raw) {
+        this.database.setSetting(key, encrypted)
+        console.log(`[settings] Clé ${key} migrée vers le stockage chiffré`)
       }
     }
   }

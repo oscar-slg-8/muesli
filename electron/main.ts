@@ -474,7 +474,10 @@ app.whenReady().then(() => {
 
   async function checkDraftMeetings(): Promise<void> {
     try {
-      const upcoming = await getUpcomingEvents(6)
+      // Toute la journée à venir (le helper ne renvoie de toute façon que les
+      // événements d'aujourd'hui). Avant : 6 minutes seulement → les réunions du
+      // jour n'apparaissaient dans la liste que 6 min avant leur début.
+      const upcoming = await getUpcomingEvents(24 * 60)
       for (const event of upcoming) {
         const calendarEventId = event.id || `${event.title}@${event.startDate}`
         const exists = database.meetingExistsForEvent(calendarEventId)
