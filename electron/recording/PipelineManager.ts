@@ -12,7 +12,7 @@
 
 import { app } from 'electron'
 import { join } from 'path'
-import { existsSync, readdirSync, rmSync, unlinkSync } from 'fs'
+import { existsSync, readdirSync, rmSync, unlinkSync, statSync } from 'fs'
 import { spawn } from 'child_process'
 import { tmpdir } from 'os'
 import { randomUUID } from 'crypto'
@@ -134,8 +134,11 @@ export class PipelineManager {
       mePath,
       '-i',
       othersPath,
+      // Rembourrer 'others' de silence et ancrer sur le micro (cf. audioCapture.ts) :
+      // amerge tronque sinon au plus court, ce qui efface le micro si l'audio
+      // système est vide (rien ne joue dans les haut-parleurs).
       '-filter_complex',
-      '[0:a][1:a]amerge=inputs=2',
+      '[1:a]apad[opad];[0:a][opad]amerge=inputs=2',
       '-ar',
       '16000',
       '-ac',
@@ -332,6 +335,32 @@ export class PipelineManager {
         error_message: 'Clé API de transcription manquante — configure-la dans les Réglages'
       })
       this.sendToRenderer('meeting:updated', meetingId)
+      return
+    }
+
+    // ── Garde-fou : audio réellement capté ? ──────────────────────────────
+    // Si tous les chunks sont vides (micro non capturé : mauvais périphérique
+    // ou autorisation refusée), inutile de transcrire — Whisper hallucinerait
+    // du texte sur du silence. On remonte une erreur actionnable.
+    const audioPaths = isStereo ? stereoChunks : legacyMe
+    const hasRealAudio = audioPaths.some(p => {
+      try {
+        return statSync(p).size > 1024
+      } catch {
+        return false
+      }
+    })
+    if (!hasRealAudio) {
+      database.updateMeeting(meetingId, {
+        status: 'error',
+        error_message:
+          "Aucun son n'a été capté pendant l'enregistrement. Vérifiez le micro " +
+          'sélectionné (Réglages Système → Son → Entrée) et l’autorisation Microphone ' +
+          'de Muesli, puis relancez un enregistrement.'
+      })
+      this.currentProgress = null
+      this.sendToRenderer('meeting:updated', meetingId)
+      console.warn(`[main] ${meetingId} : chunks audio vides — transcription annulée`)
       return
     }
 

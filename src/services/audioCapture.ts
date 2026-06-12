@@ -117,8 +117,13 @@ function mergeToStereo(mePath: string, othersPath: string, stereoPath: string): 
       mePath,
       '-i',
       othersPath,
+      // amerge tronque à la durée du flux le plus COURT. Or le canal système
+      // (others) est quasi vide quand rien ne joue dans les haut-parleurs —
+      // ce qui tronquait tout le stéréo à zéro et détruisait le micro.
+      // On rembourre 'others' de silence (apad) et on ancre la durée sur le
+      // micro (input 0), pour préserver intégralement la voix.
       '-filter_complex',
-      '[0:a][1:a]amerge=inputs=2',
+      '[1:a]apad[opad];[0:a][opad]amerge=inputs=2',
       '-ar',
       '16000',
       '-ac',
@@ -340,8 +345,11 @@ export class AudioCaptureService {
         [
           '-f',
           'avfoundation',
+          // ':default' = micro par défaut du système (Réglages Système → Son → Entrée).
+          // NE PAS utiliser ':0' : c'est l'index 0 d'avfoundation, qui change selon les
+          // périphériques Bluetooth branchés (ex. AirPods) et peut ne fournir aucun son.
           '-i',
-          ':0',
+          ':default',
           '-ar',
           String(this.SAMPLERATE),
           '-ac',
